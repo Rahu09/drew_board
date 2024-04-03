@@ -11,12 +11,6 @@ import { Note } from "./note";
 import { Text } from "./text";
 import { Path } from "./path";
 
-// import { Text } from "./text";
-// import { Ellipse } from "./ellipse";
-// import { Rectangle } from "./rectangle";
-// import { Note } from "./note";
-// import { Path } from "./path";
-
 interface LayerPreviewProps {
   id: string;
   onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
