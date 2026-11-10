@@ -1,8 +1,12 @@
-import { ReactNode } from "react";
-import { ClientSideSuspense } from "@liveblocks/react";
-import { LiveList, LiveMap, LiveObject } from "@liveblocks/client";
+"use client";
 
-import { Layer } from "@/types/canvas";
+import { ReactNode } from "react";
+import { LiveList, LiveMap } from "@liveblocks/client";
+import {
+  ClientSideSuspense,
+  LiveblocksProvider,
+} from "@liveblocks/react/suspense";
+
 import { RoomProvider } from "@/liveblocks.config";
 
 interface roomProps {
@@ -13,22 +17,22 @@ interface roomProps {
 
 export const Room = ({ children, roomId, fallback }: roomProps) => {
   return (
-    <RoomProvider
-      id={roomId}
-      initialPresence={{
-        cursor: null,
-        selection: [],
-        pencilDraft: null,
-        penColor: null,
-      }}
-      initialStorage={{
-        layers: new LiveMap(),
-        layerIds: new LiveList(),
-      }}
-    >
-      <ClientSideSuspense fallback={fallback}>
-        {() => children}
-      </ClientSideSuspense>
-    </RoomProvider>
+    <LiveblocksProvider authEndpoint="/api/liveblocks-auth" throttle={16}>
+      <RoomProvider
+        id={roomId}
+        initialPresence={{
+          cursor: null,
+          selection: [],
+          pencilDraft: null,
+          penColor: null,
+        }}
+        initialStorage={{
+          layers: new LiveMap(),
+          layerIds: new LiveList([]),
+        }}
+      >
+        <ClientSideSuspense fallback={fallback}>{children}</ClientSideSuspense>
+      </RoomProvider>
+    </LiveblocksProvider>
   );
 };

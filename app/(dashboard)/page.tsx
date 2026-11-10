@@ -1,18 +1,21 @@
 "use client";
 
+import { use } from "react";
 import { useOrganization } from "@clerk/nextjs";
 
 import { EmptyOrg } from "./_component/empty-org";
 import { BoardList } from "./_component/board-list";
 
 interface DashboardPageProps {
-  searchParams: {
+  // Next.js 15+ passes search params as a Promise.
+  searchParams: Promise<{
     search?: string;
     favorites?: string;
-  };
+  }>;
 }
 
 const DashboardPage = ({ searchParams }: DashboardPageProps) => {
+  const query = use(searchParams);
   const { organization } = useOrganization();
 
   return (
@@ -20,7 +23,7 @@ const DashboardPage = ({ searchParams }: DashboardPageProps) => {
       {!organization ? (
         <EmptyOrg />
       ) : (
-        <BoardList orgId={organization.id} query={searchParams} />
+        <BoardList orgId={organization.id} query={query} />
       )}
     </div>
   );

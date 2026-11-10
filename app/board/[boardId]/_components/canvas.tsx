@@ -203,7 +203,7 @@ export const Canvas = ({ boardId }: CanvasProps) => {
 
   const updateSelectionNet = useMutation(
     ({ storage, setMyPresence }, current: Point, origin: Point) => {
-      const layers = storage.get("layers").toImmutable();
+      const layers = storage.get("layers").toJSON();
       setCanvasState({
         mode: CanvasMode.SelectionNet,
         origin,
@@ -287,7 +287,7 @@ export const Canvas = ({ boardId }: CanvasProps) => {
 
       setCanvasState({ origin: point, mode: CanvasMode.Pressing });
     },
-    [camera, canvasState.mode, setCanvasState, , startDrawing]
+    [camera, canvasState.mode, setCanvasState, startDrawing]
   );
 
   const onPointerUp = useMutation(
@@ -440,7 +440,7 @@ export const Canvas = ({ boardId }: CanvasProps) => {
       />
       <SelectionTools camera={camera} setLastUsedColor={setLastUsedColor} />
       <svg
-        className="h-[100vh] w-[100vw]"
+        className="h-screen w-screen"
         onWheel={onWheel}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}

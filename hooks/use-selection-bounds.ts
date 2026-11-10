@@ -1,9 +1,9 @@
 import { shallow } from "@liveblocks/react";
 
-import { Layer, XYWH } from "@/types/canvas";
+import { XYWH } from "@/types/canvas";
 import { useStorage, useSelf } from "@/liveblocks.config";
 
-const boundingBox = (layers: Layer[]): XYWH | null => {
+const boundingBox = (layers: readonly XYWH[]): XYWH | null => {
   const first = layers[0];
 
   if (!first) {
@@ -48,7 +48,7 @@ export const useSelectionBounds = () => {
 
   return useStorage((root) => {
     const selectedLayers = selection
-      .map((layerId) => root.layers.get(layerId)!)
+      .map((layerId) => root.layers[layerId])
       .filter(Boolean);
 
     return boundingBox(selectedLayers);

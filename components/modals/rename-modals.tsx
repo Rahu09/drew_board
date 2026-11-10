@@ -26,6 +26,8 @@ export const RenameModal = () => {
   const [title, setTitle] = useState(initialValues.title);
 
   useEffect(() => {
+    // Reset the input whenever a different board is opened for renaming.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTitle(initialValues.title);
   }, [initialValues.title]);
 

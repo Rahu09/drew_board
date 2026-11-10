@@ -26,7 +26,7 @@ export const SelectionTools = memo(
         const liveLayerIds = storage.get("layerIds");
         const indices: number[] = [];
 
-        const arr = liveLayerIds.toImmutable();
+        const arr = liveLayerIds.toJSON();
 
         for (let i = 0; i < arr.length; i++) {
           if (selection.includes(arr[i])) {
@@ -49,7 +49,7 @@ export const SelectionTools = memo(
         const liveLayerIds = storage.get("layerIds");
         const indices: number[] = [];
 
-        const arr = liveLayerIds.toImmutable();
+        const arr = liveLayerIds.toJSON();
 
         for (let i = 0; i < arr.length; i++) {
           if (selection.includes(arr[i])) {
@@ -89,7 +89,7 @@ export const SelectionTools = memo(
 
     return (
       <div
-        className="absolute p-3 rounded-xl bg-white shadow-sm border flex select-none"
+        className="absolute p-3 rounded-xl bg-white shadow-xs border flex select-none"
         style={{
           transform: `translate(
           calc(${x}px - 50%),
