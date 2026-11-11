@@ -54,6 +54,8 @@ export const set = mutation({
       thumbnailId: args.storageId ?? undefined,
       ...(args.edited && {
         lastEditedAt: Date.now(),
+        // Sort key of the "Last edited" order (see boards.ts).
+        activityAt: Date.now(),
         lastEditorId: identity.subject,
         lastEditorName: identity.name ?? identity.email ?? "Anonymous",
       }),

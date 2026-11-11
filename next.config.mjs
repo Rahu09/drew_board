@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Memoizes components at build time (needs babel-plugin-react-compiler).
+  // Measured in Phase 6: see docs/PROJECT_HISTORY.md.
+  reactCompiler: true,
   images: {
     remotePatterns: [
       {

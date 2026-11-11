@@ -1,16 +1,20 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
+  ClerkLoaded,
+  ClerkLoading,
   UserButton,
   OrganizationSwitcher,
   useOrganization,
 } from "@clerk/nextjs";
 
-import { SearchInput } from "./search-input";
+import { SearchInput, SearchInputFallback } from "./search-input";
 import { InviteButton } from "./invite-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Navbar = () => {
   const { organization } = useOrganization();
@@ -23,9 +27,15 @@ export const Navbar = () => {
       </Link>
       {/* Its own row below lg, after the org switcher and account. */}
       <div className="order-last basis-full lg:order-none lg:basis-auto lg:flex-1">
-        <SearchInput />
+        <Suspense fallback={<SearchInputFallback />}>
+          <SearchInput />
+        </Suspense>
       </div>
       <div className="block lg:hidden flex-1 min-w-0">
+        {/* Clerk's own components render nothing until Clerk has loaded. */}
+        <ClerkLoading>
+          <Skeleton className="h-10 w-full max-w-[376px]" />
+        </ClerkLoading>
         <OrganizationSwitcher
           appearance={{
             elements: {
@@ -50,7 +60,12 @@ export const Navbar = () => {
       </div>
       {organization && <InviteButton />}
       <ThemeToggle />
-      <UserButton />
+      <ClerkLoading>
+        <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+      </ClerkLoading>
+      <ClerkLoaded>
+        <UserButton />
+      </ClerkLoaded>
     </header>
   );
 };

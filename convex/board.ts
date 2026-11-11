@@ -14,6 +14,7 @@ import {
   ORG_NOT_ACTIVE,
   personalWorkspaceId,
 } from "./workspace";
+import { titleSortKey } from "./sort";
 
 const images = [
   "/placeholders/1.svg",
@@ -57,9 +58,12 @@ export const create = mutation({
     const identity = await requireWorkspaceAccess(ctx, args.orgId);
 
     const randomImage = images[Math.floor(Math.random() * images.length)];
+    const title = validateTitle(args.title);
 
     return await ctx.db.insert("boards", {
-      title: validateTitle(args.title),
+      title,
+      titleKey: titleSortKey(title),
+      activityAt: Date.now(),
       orgId: args.orgId,
       authorId: identity.subject,
       // Not every Clerk user has a name (e.g. email-only sign-ups).
@@ -173,9 +177,9 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { board } = await requireBoard(ctx, args.id);
 
-    await ctx.db.patch(board._id, {
-      title: validateTitle(args.title),
-    });
+    const title = validateTitle(args.title);
+
+    await ctx.db.patch(board._id, { title, titleKey: titleSortKey(title) });
 
     return board._id;
   },

@@ -1,8 +1,15 @@
 import {
-  Circle,
+  EllipsisVertical,
+  Eraser,
+  Hand,
+  ImagePlus,
   Menu,
+  Minus,
   MousePointer2,
+  MoveUpRight,
+  PanelRight,
   Pencil,
+  Plus,
   Redo2,
   Square,
   StickyNote,
@@ -10,31 +17,81 @@ import {
   Undo2,
 } from "lucide-react";
 
-import { handFont, logoFont } from "./fonts";
+import { shapePaths } from "@/components/canvas/rough-shape";
+
+import { handFont } from "./fonts";
 
 // A picture of a board, drawn as one SVG and animated with SVG <animate>
-// elements: no JavaScript, and it scales with the page. Colors come from the
-// board's color picker and cursor colors.
+// elements: no JavaScript, and it scales with the page. It mirrors the real
+// canvas: white paper, hand-drawn shapes (the same rough.js helper, run on
+// the server), the toolbar on top, the menu and board name top left, Share
+// top right, zoom and undo bottom left.
 const NOTE_YELLOW = "#FFF9B1";
-const NOTE_GREEN = "#44CA63";
-const SHAPE_BLUE = "#278EED";
-const SHAPE_ORANGE = "#FC8E2A";
+const NOTE_PINK = "#FFC9DE";
+const INK = "#1F2937";
+const PEN_BLUE = "#1971C2";
+const SHAPE_ORANGE = "#E8590C";
+const PILL = "#ECECF4";
+const BORDER = "#E5E5E5";
+const INDIGO = "#6366F1";
 const MAYA = "#7C3AED";
 const LEO = "#059669";
 const YOU = "#D97706";
-const INK = "#1F2937";
 
-// Leo draws an arrow from the green note to the ellipse. The cursor follows
-// the same path the stroke is drawn along, so they stay in sync.
-const ARROW_PATH = "M690 345 C690 392 722 426 772 432 M752 417 L772 432 L753 447";
-const ARROW_DURATION = "8s";
+// Leo underlines the title with the pen. The cursor follows the same path
+// the stroke is drawn along, so they stay in sync.
+const PEN_PATH =
+  "M298 138 C330 150 362 128 396 139 S452 148 478 134 S506 132 512 140";
+const PEN_DURATION = "8s";
 const DRAW_KEY_TIMES = "0;0.45;1";
 
 // Maya wanders over the board and keeps her selection on the rectangle.
 const MAYA_PATH =
-  "M310 300 C370 250 470 262 470 330 S370 470 300 420 S240 330 310 300";
+  "M330 420 C390 380 470 400 470 450 S380 540 320 500 S270 450 330 420";
 
-const toolbarIcons = [MousePointer2, Type, StickyNote, Square, Circle, Pencil];
+// The two hand-drawn shapes. A fixed seed keeps their wobble the same on
+// every render.
+const RECT = { x: 96, y: 352, width: 196, height: 112 };
+const ELLIPSE = { x: 742, y: 398, width: 196, height: 118 };
+
+const rectPaths = shapePaths({
+  kind: "rectangle",
+  ...RECT,
+  roughness: 1,
+  edges: "round",
+  stroke: INK,
+  strokeWidth: 2,
+  background: null,
+  seed: 11,
+});
+
+const ellipsePaths = shapePaths({
+  kind: "ellipse",
+  ...ELLIPSE,
+  roughness: 1,
+  stroke: SHAPE_ORANGE,
+  strokeWidth: 2,
+  background: null,
+  seed: 23,
+});
+
+// An arrow layer from the rectangle to the ellipse: a line and a two-stroke
+// head, as on the canvas.
+const ARROW = "M304 414 L728 452 M711 441 L728 452 L710 460";
+
+const toolbarIcons = [
+  Hand,
+  MousePointer2,
+  Pencil,
+  Eraser,
+  Square,
+  MoveUpRight,
+  Type,
+  ImagePlus,
+  StickyNote,
+  EllipsisVertical,
+];
+const ACTIVE_TOOL = 1;
 
 const Cursor = ({ name, color }: { name: string; color: string }) => (
   <g>
@@ -59,6 +116,41 @@ const Cursor = ({ name, color }: { name: string; color: string }) => (
   </g>
 );
 
+/** Lines of hand-written text, centered on (cx, cy). */
+const HandText = ({
+  cx,
+  cy,
+  lines,
+  size,
+  fill = INK,
+}: {
+  cx: number;
+  cy: number;
+  lines: string[];
+  size: number;
+  fill?: string;
+}) => {
+  const lineHeight = size * 1.25;
+
+  return (
+    <text
+      x={cx}
+      y={cy - ((lines.length - 1) * lineHeight) / 2}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      fontSize={size}
+      fill={fill}
+      style={{ fontFamily: handFont.style.fontFamily }}
+    >
+      {lines.map((line, index) => (
+        <tspan key={line} x={cx} dy={index === 0 ? 0 : lineHeight}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+};
+
 const Note = ({
   x,
   y,
@@ -74,23 +166,21 @@ const Note = ({
   fill: string;
   lines: string[];
 }) => (
-  <g filter="url(#demo-shadow)">
-    <rect x={x} y={y} width={width} height={height} fill={fill} />
-    <text
-      x={x + width / 2}
-      y={y + height / 2 - (lines.length - 1) * 17}
-      textAnchor="middle"
-      dominantBaseline="middle"
-      fontSize={28}
-      fill={INK}
-      style={{ fontFamily: handFont.style.fontFamily }}
-    >
-      {lines.map((line, index) => (
-        <tspan key={line} x={x + width / 2} dy={index === 0 ? 0 : 34}>
-          {line}
-        </tspan>
-      ))}
-    </text>
+  <g>
+    <rect
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill={fill}
+      filter="url(#demo-shadow)"
+    />
+    <HandText
+      cx={x + width / 2}
+      cy={y + height / 2}
+      lines={lines}
+      size={26}
+    />
   </g>
 );
 
@@ -104,10 +194,10 @@ const Avatar = ({
   color: string;
 }) => (
   <g>
-    <circle cx={cx} cy={40} r={15} fill="white" stroke={color} strokeWidth={2.5} />
+    <circle cx={cx} cy={36} r={15} fill="white" stroke={color} strokeWidth={2.5} />
     <text
       x={cx}
-      y={40.5}
+      y={36.5}
       textAnchor="middle"
       dominantBaseline="middle"
       fontSize={13}
@@ -127,29 +217,20 @@ export const CanvasDemo = () => {
         viewBox="0 0 1000 600"
         className="block h-auto w-full select-none"
         role="img"
-        aria-label="A Board canvas with sticky notes and shapes. One teammate draws an arrow while another moves their cursor across the board."
+        aria-label="A Board canvas with sticky notes, hand-drawn shapes joined by an arrow, and a comment. One teammate underlines the title with the pen while another moves their cursor across the board."
       >
         <defs>
-          <pattern
-            id="demo-dots"
-            width={24}
-            height={24}
-            patternUnits="userSpaceOnUse"
-          >
-            <circle cx={2} cy={2} r={1.2} fill="#D4D4D4" />
-          </pattern>
           <filter id="demo-shadow" x="-10%" y="-10%" width="130%" height="140%">
-            <feDropShadow dx={0} dy={2} stdDeviation={3} floodOpacity={0.15} />
+            <feDropShadow dx={0} dy={2} stdDeviation={3} floodOpacity={0.14} />
           </filter>
         </defs>
 
-        <rect width={1000} height={600} fill="#F5F5F5" />
-        <rect width={1000} height={600} fill="url(#demo-dots)" />
+        <rect width={1000} height={600} fill="white" />
 
         {/* Canvas content */}
         <text
-          x={360}
-          y={100}
+          x={300}
+          y={124}
           fontSize={38}
           fill={INK}
           style={{ fontFamily: handFont.style.fontFamily }}
@@ -157,56 +238,107 @@ export const CanvasDemo = () => {
           Q3 planning
         </text>
         <Note
-          x={340}
-          y={125}
-          width={200}
-          height={175}
+          x={300}
+          y={166}
+          width={190}
+          height={164}
           fill={NOTE_YELLOW}
-          lines={["Launch the", "landing page"]}
+          lines={["Talk to", "five users"]}
         />
         <Note
-          x={575}
-          y={175}
-          width={175}
-          height={155}
-          fill={NOTE_GREEN}
-          lines={["Guest mode", "next!"]}
+          x={524}
+          y={196}
+          width={180}
+          height={150}
+          fill={NOTE_PINK}
+          lines={["Try it,", "no sign-up"]}
         />
-        <rect
-          x={110}
-          y={330}
-          width={190}
-          height={115}
-          fill={SHAPE_BLUE}
-          filter="url(#demo-shadow)"
+
+        {rectPaths.map((path, index) => (
+          <path
+            key={index}
+            d={path.d}
+            fill={path.fill}
+            stroke={path.stroke}
+            strokeWidth={path.strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        <HandText
+          cx={RECT.x + RECT.width / 2}
+          cy={RECT.y + RECT.height / 2}
+          lines={["Design"]}
+          size={28}
         />
-        <ellipse
-          cx={850}
-          cy={470}
-          rx={95}
-          ry={58}
+        {ellipsePaths.map((path, index) => (
+          <path
+            key={index}
+            d={path.d}
+            fill={path.fill}
+            stroke={path.stroke}
+            strokeWidth={path.strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        <HandText
+          cx={ELLIPSE.x + ELLIPSE.width / 2}
+          cy={ELLIPSE.y + ELLIPSE.height / 2}
+          lines={["Launch"]}
+          size={28}
           fill={SHAPE_ORANGE}
-          filter="url(#demo-shadow)"
         />
+        <path
+          d={ARROW}
+          fill="none"
+          stroke={INK}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
         {/* Another user's selection is outlined in their color. */}
         <rect
-          x={104}
-          y={324}
-          width={202}
-          height={127}
+          x={RECT.x - 8}
+          y={RECT.y - 8}
+          width={RECT.width + 16}
+          height={RECT.height + 16}
           fill="none"
           stroke={MAYA}
           strokeWidth={2}
         />
 
+        {/* A comment pinned to the board. */}
+        <g filter="url(#demo-shadow)">
+          {/* A round bubble whose bottom-left corner points at the spot. */}
+          <path
+            d="M888 364 a16 16 0 0 1 32 0 a16 16 0 0 1 -16 16 h-16 z"
+            fill="white"
+            stroke={BORDER}
+          />
+          <circle cx={904} cy={364} r={11} fill={YOU} />
+          <text
+            x={904}
+            y={364.5}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={11}
+            fontWeight={600}
+            fill="white"
+          >
+            Y
+          </text>
+        </g>
+
         {/* Animated layer: hidden when the visitor prefers reduced motion. */}
         <g className="motion-reduce:hidden">
           <path
-            d={ARROW_PATH}
+            d={PEN_PATH}
             pathLength={1}
             fill="none"
-            stroke={INK}
-            strokeWidth={6}
+            stroke={PEN_BLUE}
+            strokeWidth={5}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray="1 1"
@@ -215,24 +347,24 @@ export const CanvasDemo = () => {
               attributeName="stroke-dashoffset"
               values="1;0;0"
               keyTimes={DRAW_KEY_TIMES}
-              dur={ARROW_DURATION}
+              dur={PEN_DURATION}
               repeatCount="indefinite"
             />
             <animate
               attributeName="opacity"
               values="1;1;0;0"
               keyTimes="0;0.8;0.9;1"
-              dur={ARROW_DURATION}
+              dur={PEN_DURATION}
               repeatCount="indefinite"
             />
           </path>
           <g>
             <animateMotion
-              path={ARROW_PATH}
+              path={PEN_PATH}
               keyPoints="0;1;1"
               keyTimes={DRAW_KEY_TIMES}
               calcMode="linear"
-              dur={ARROW_DURATION}
+              dur={PEN_DURATION}
               repeatCount="indefinite"
             />
             <Cursor name="Leo" color={LEO} />
@@ -247,74 +379,113 @@ export const CanvasDemo = () => {
           </g>
         </g>
 
-        {/* Still layer for reduced motion: the finished arrow and cursors. */}
+        {/* Still layer for reduced motion: the finished stroke and cursors. */}
         <g className="hidden motion-reduce:inline">
           <path
-            d={ARROW_PATH}
+            d={PEN_PATH}
             fill="none"
-            stroke={INK}
-            strokeWidth={6}
+            stroke={PEN_BLUE}
+            strokeWidth={5}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <g transform="translate(772 432)">
+          <g transform="translate(512 140)">
             <Cursor name="Leo" color={LEO} />
           </g>
-          <g transform="translate(470 330)">
+          <g transform="translate(470 450)">
             <Cursor name="Maya" color={MAYA} />
           </g>
         </g>
 
         {/* Board chrome, as in the app */}
-        <g filter="url(#demo-shadow)">
-          <rect x={16} y={16} width={318} height={48} rx={8} fill="white" />
-          <image href="/logo.svg" x={26} y={25} width={45} height={30} />
-          <text
-            x={78}
-            y={47}
-            fontSize={19}
-            fontWeight={600}
-            fill="black"
-            style={{ fontFamily: logoFont.style.fontFamily }}
-          >
-            Board
-          </text>
-          <text x={146} y={46} fontSize={18} fill="#D4D4D4">
-            |
-          </text>
-          <text x={162} y={45.5} fontSize={15} fill={INK}>
-            Q3 planning
-          </text>
-          <text x={260} y={46} fontSize={18} fill="#D4D4D4">
-            |
-          </text>
-          <Menu x={280} y={28} width={24} height={24} color={INK} />
-        </g>
 
+        {/* Menu and board name */}
         <g filter="url(#demo-shadow)">
-          <rect x={870} y={16} width={114} height={48} rx={8} fill="white" />
-          <Avatar cx={895} initial="M" color={MAYA} />
-          <Avatar cx={927} initial="L" color={LEO} />
-          <Avatar cx={959} initial="Y" color={YOU} />
+          <rect
+            x={16}
+            y={14}
+            width={176}
+            height={44}
+            rx={12}
+            fill="white"
+            stroke={BORDER}
+          />
         </g>
+        <rect x={22} y={20} width={32} height={32} rx={8} fill={PILL} />
+        <Menu x={28} y={26} width={20} height={20} color={INK} />
+        <text x={66} y={41} fontSize={15} fontWeight={500} fill={INK}>
+          Q3 planning
+        </text>
 
+        {/* Toolbar */}
         <g filter="url(#demo-shadow)">
-          <rect x={16} y={150} width={48} height={280} rx={8} fill="white" />
-          <rect x={22} y={156} width={36} height={36} rx={6} fill="#DBEAFE" />
-          {toolbarIcons.map((Icon, index) => (
-            <Icon
-              key={index}
-              x={28}
-              y={162 + index * 44}
-              width={24}
-              height={24}
-              color={index === 0 ? "#1E40AF" : INK}
-            />
-          ))}
-          <rect x={16} y={446} width={48} height={92} rx={8} fill="white" />
-          <Undo2 x={28} y={458} width={24} height={24} color={INK} />
-          <Redo2 x={28} y={502} width={24} height={24} color="#A3A3A3" />
+          <rect
+            x={286}
+            y={13}
+            width={428}
+            height={46}
+            rx={12}
+            fill="white"
+            stroke={BORDER}
+          />
         </g>
+        <image href="/logo.svg" x={297} y={25} width={33} height={22} />
+        <rect x={338} y={22} width={1} height={28} fill={BORDER} />
+        <rect
+          x={346 + ACTIVE_TOOL * 36}
+          y={19}
+          width={34}
+          height={34}
+          rx={8}
+          fill="#E0E7FF"
+        />
+        {toolbarIcons.map((Icon, index) => (
+          <Icon
+            key={index}
+            x={353 + index * 36}
+            y={26}
+            width={20}
+            height={20}
+            color={index === ACTIVE_TOOL ? "#312E81" : INK}
+          />
+        ))}
+
+        {/* Who is here, Share, sidebar */}
+        <Avatar cx={806} initial="M" color={MAYA} />
+        <Avatar cx={832} initial="L" color={LEO} />
+        <Avatar cx={858} initial="Y" color={YOU} />
+        <rect x={882} y={18} width={62} height={36} rx={8} fill={INDIGO} />
+        <text
+          x={913}
+          y={36.5}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={14}
+          fontWeight={500}
+          fill="white"
+        >
+          Share
+        </text>
+        <rect x={950} y={18} width={36} height={36} rx={8} fill={PILL} />
+        <PanelRight x={958} y={26} width={20} height={20} color={INK} />
+
+        {/* Zoom, undo and redo */}
+        <rect x={16} y={550} width={124} height={36} rx={8} fill={PILL} />
+        <Minus x={26} y={560} width={16} height={16} color={INK} />
+        <text
+          x={78}
+          y={568.5}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={12}
+          fill={INK}
+        >
+          100%
+        </text>
+        <Plus x={114} y={560} width={16} height={16} color={INK} />
+        <rect x={148} y={550} width={76} height={36} rx={8} fill={PILL} />
+        <Undo2 x={159} y={560} width={16} height={16} color={INK} />
+        <Redo2 x={197} y={560} width={16} height={16} color="#A3A3A3" />
       </svg>
     </div>
   );

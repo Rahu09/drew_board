@@ -14,6 +14,8 @@ import type * as boards from "../boards.js";
 import type * as comments from "../comments.js";
 import type * as images from "../images.js";
 import type * as liveblocks from "../liveblocks.js";
+import type * as migrations from "../migrations.js";
+import type * as sort from "../sort.js";
 import type * as thumbnails from "../thumbnails.js";
 import type * as workspace from "../workspace.js";
 
@@ -30,6 +32,8 @@ declare const fullApi: ApiFromModules<{
   comments: typeof comments;
   images: typeof images;
   liveblocks: typeof liveblocks;
+  migrations: typeof migrations;
+  sort: typeof sort;
   thumbnails: typeof thumbnails;
   workspace: typeof workspace;
 }>;

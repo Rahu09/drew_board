@@ -945,9 +945,14 @@ export const Canvas = ({
     }
   }, [actions]);
 
+  // The layers as they were when the selection net was started. Reading
+  // them from the store copies the whole board, far too much to do on every
+  // pointer move; nobody moves them much during one drag.
+  const netLayers = useRef<BoardSnapshot["layers"] | null>(null);
+
   const updateSelectionNet = useCallback(
     (current: Point, origin: Point) => {
-      const { layers } = actions.getSnapshot();
+      const layers = (netLayers.current ??= actions.getSnapshot().layers);
 
       setCanvasState({
         mode: CanvasMode.SelectionNet,
@@ -955,9 +960,22 @@ export const Canvas = ({
         current,
       });
 
-      actions.setSelection(
-        findIntersectingLayersWithRectangle(layerIds, layers, origin, current)
+      const ids = findIntersectingLayersWithRectangle(
+        layerIds,
+        layers,
+        origin,
+        current
       );
+      const selected = actions.getSelection();
+
+      // Most moves don't change what is inside the net: then nothing is
+      // sent to the other users and nothing re-renders.
+      if (
+        ids.length !== selected.length ||
+        ids.some((id, index) => id !== selected[index])
+      ) {
+        actions.setSelection(ids);
+      }
     },
     [actions, layerIds]
   );
@@ -970,6 +988,7 @@ export const Canvas = ({
         camera.scale;
 
       if (distance > 5) {
+        netLayers.current = actions.getSnapshot().layers;
         setCanvasState({
           mode: CanvasMode.SelectionNet,
           origin,
@@ -977,7 +996,7 @@ export const Canvas = ({
         });
       }
     },
-    [camera.scale]
+    [actions, camera.scale]
   );
 
   const resizeSelectedLayer = useCallback(
@@ -1755,7 +1774,7 @@ export const Canvas = ({
 
   return (
     <main
-      className="h-full w-full relative touch-none"
+      className="h-full w-full relative overflow-hidden touch-none"
       style={{ backgroundColor: background ?? "#ffffff" }}
       onDragOver={(e) => {
         if (!readOnly && e.dataTransfer.types.includes("Files")) {
@@ -1968,7 +1987,10 @@ export const Canvas = ({
         <svg
           ref={svgRef}
           data-canvas
-          className="h-screen w-screen"
+          // Exactly the size of <main>, never 100vh: on iPhones 100vh is
+          // taller than the visible page, which let Safari scroll the board
+          // and push the top buttons under the status bar.
+          className="block h-full w-full"
           style={{ cursor: cursorFor(canvasState, readOnly) }}
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}

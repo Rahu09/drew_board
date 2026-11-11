@@ -17,18 +17,16 @@ interface DashboardPageProps {
 
 const DashboardPage = ({ searchParams }: DashboardPageProps) => {
   const { search, favorites, sort } = use(searchParams);
+  // Null until Clerk has loaded: the list then shows its skeleton, so the
+  // page has its final layout from the first (server-rendered) paint.
   const workspace = useWorkspace();
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 sm:p-6 sm:pt-2">
-      {workspace && (
-        <BoardList
-          workspace={workspace}
-          query={{ search, favorites }}
-          sort={parseSort(sort)}
-        />
-      )}
-    </div>
+    <BoardList
+      workspace={workspace}
+      query={{ search: search?.trim() || undefined, favorites: !!favorites }}
+      sort={parseSort(sort)}
+    />
   );
 };
 

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import type { OptimisticLocalStore } from "convex/browser";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -15,33 +15,56 @@ import type { Id } from "@/convex/_generated/dataModel";
  * back by itself if the mutation fails.
  */
 
-type BoardList = NonNullable<FunctionReturnType<typeof api.boards.get>>;
-export type BoardListItem = BoardList[number];
-type ListArgs = { orgId: string; search?: string; favorites?: string };
+export type BoardListItem = FunctionReturnType<
+  typeof api.boards.list
+>["page"][number];
+type BoardList = BoardListItem[];
+/** The arguments of one loaded page of a list (see boards.list). */
+type ListArgs = FunctionArgs<typeof api.boards.list>;
 
 /** Ids of boards still being created; their cards can't be opened yet. */
 export const OPTIMISTIC_ID_PREFIX = "optimistic:";
 
-/** Rewrites every loaded board list. */
+/** The first page of a list: where new cards are put. */
+const isFirstPage = (args: ListArgs) => args.paginationOpts.cursor === null;
+
+/** Rewrites every loaded page of every loaded board list. */
 const updateLists = (
   store: OptimisticLocalStore,
   update: (list: BoardList, args: ListArgs) => BoardList
 ) => {
-  for (const { args, value } of store.getAllQueries(api.boards.get)) {
-    if (value) store.setQuery(api.boards.get, args, update(value, args));
+  for (const { args, value } of store.getAllQueries(api.boards.list)) {
+    if (value) {
+      store.setQuery(api.boards.list, args, {
+        ...value,
+        page: update(value.page, args),
+      });
+    }
   }
 };
 
 const findBoard = (store: OptimisticLocalStore, id: string) => {
-  for (const { value } of store.getAllQueries(api.boards.get)) {
-    const board = value?.find((item) => item._id === id);
+  for (const { value } of store.getAllQueries(api.boards.list)) {
+    const board = value?.page.find((item) => item._id === id);
     if (board) return board;
   }
 };
 
+/** Whether a loaded page of the plain favorites list already has the board. */
+const isInFavoritesList = (store: OptimisticLocalStore, id: string) =>
+  store
+    .getAllQueries(api.boards.list)
+    .some(
+      ({ args, value }) =>
+        args.favorites &&
+        !args.search &&
+        value?.page.some((item) => item._id === id)
+    );
+
 export const useFavoriteBoard = () =>
   useMutation(api.board.favorite).withOptimisticUpdate((store, { id }) => {
     const board = findBoard(store, id);
+    const listed = isInFavoritesList(store, id);
 
     updateLists(store, (list, args) => {
       const marked = list.map((item) =>
@@ -50,9 +73,10 @@ export const useFavoriteBoard = () =>
       // Newest favorite first, as the server lists them.
       return args.favorites &&
         !args.search &&
+        isFirstPage(args) &&
         board &&
         args.orgId === board.orgId &&
-        !list.some((item) => item._id === id)
+        !listed
         ? [{ ...board, isFavorite: true }, ...marked]
         : marked;
     });
@@ -106,8 +130,15 @@ const addCreatingBoard = (
     thumbnailUrl: null,
   };
 
+  // On top of the lists that show the newest board first. In the other
+  // orders its place isn't known yet; the server puts it there.
   updateLists(store, (list, args) =>
-    args.orgId === orgId && !args.favorites && !args.search
+    args.orgId === orgId &&
+    !args.favorites &&
+    !args.search &&
+    isFirstPage(args) &&
+    (args.sort ?? "edited") !== "oldest" &&
+    args.sort !== "name"
       ? [board, ...list]
       : list
   );

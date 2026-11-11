@@ -35,8 +35,9 @@ export default async function LandingPage() {
               </span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-              Board is a shared canvas for your team. Drop sticky notes, draw
-              shapes and freehand, and watch everyone&apos;s cursor move live.
+              Board is a shared canvas with a hand-drawn feel. Sketch shapes
+              and arrows, drop sticky notes and images, leave comments, and
+              watch everyone&apos;s cursor move live.
             </p>
             <CtaButtons signedIn={signedIn} className="mt-10" />
             {!signedIn && (

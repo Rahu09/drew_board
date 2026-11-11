@@ -8,6 +8,20 @@ import { ChangeEvent, useEffect, useEffectEvent, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 
+/** The search box as the server sends it, before the URL is known. */
+export const SearchInputFallback = () => (
+  <div className="w-full relative">
+    <Search aria-hidden className="absolute top-1/2 left-3 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+    <Input
+      className="w-full lg:max-w-[516px] pl-9"
+      type="search"
+      aria-label="Search boards"
+      placeholder="Search boards"
+      readOnly
+    />
+  </div>
+);
+
 export const SearchInput = () => {
   const router = useRouter();
   const pathname = usePathname();

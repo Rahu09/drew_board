@@ -18,8 +18,15 @@ export default defineSchema({
     lastEditedAt: v.optional(v.number()),
     lastEditorId: v.optional(v.string()),
     lastEditorName: v.optional(v.string()),
+    // Sort keys for the paginated dashboard lists (see boards.ts, sort.ts):
+    // when the board was created or last edited, and its lowercased title.
+    // Boards from before these fields get them from migrations.ts.
+    activityAt: v.optional(v.number()),
+    titleKey: v.optional(v.string()),
   })
     .index("by_org", ["orgId"])
+    .index("by_org_activity", ["orgId", "activityAt"])
+    .index("by_org_title", ["orgId", "titleKey"])
     .index("by_share_token", ["shareToken"])
     .searchIndex("search_title", {
       searchField: "title",

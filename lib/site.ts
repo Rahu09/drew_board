@@ -18,6 +18,6 @@ export const siteConfig = {
   name: "Board",
   title: "Board: a real-time collaborative whiteboard",
   description:
-    "Sketch, plan and brainstorm together on an infinite whiteboard. Shapes, sticky notes, text and a freehand pen, with live cursors for your whole team.",
+    "Sketch, plan and brainstorm together on an infinite whiteboard. Hand-drawn shapes, arrows, sticky notes, images and comments, with live cursors for your whole team. Start drawing without signing up.",
   url: resolveSiteUrl(),
 };

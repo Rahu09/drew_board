@@ -1,3 +1,5 @@
+"use client";
+
 import { Loader } from "lucide-react";
 
 import { ToolbarSkeleton } from "@/components/canvas/toolbar";
