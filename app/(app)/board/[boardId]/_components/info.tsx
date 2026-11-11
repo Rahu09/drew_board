@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu } from "lucide-react";
 import { useQuery } from "convex/react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Poppins } from "next/font/google";
 
 import { cn } from "@/lib/utils";
@@ -12,6 +14,8 @@ import { api } from "@/convex/_generated/api";
 import { Actions } from "@/components/actions";
 import { Button } from "@/components/ui/button";
 import { useRenameModal } from "@/store/use-rename-modal";
+import { useShareModal } from "@/store/use-share-modal";
+import { isPersonalWorkspaceId } from "@/convex/workspace";
 
 interface InfoProps {
   boardId: string;
@@ -32,6 +36,8 @@ export const Info = ({ boardId }: InfoProps) => {
   const data = useQuery(api.board.get, {
     id: boardId,
   });
+
+  useShareOnLoad(data);
 
   if (!data) return <InfoSkeleton />;
 
@@ -63,7 +69,13 @@ export const Info = ({ boardId }: InfoProps) => {
         </Button>
       </Hint>
       <TabSeparator />
-      <Actions id={data._id} title={data.title} side="bottom" sideOffset={10}>
+      <Actions
+        id={data._id}
+        title={data.title}
+        orgId={data.orgId}
+        side="bottom"
+        sideOffset={10}
+      >
         <div>
           <Hint label="Main menu" side="bottom" sideOffset={10}>
             <Button size="icon" variant="board">
@@ -74,6 +86,29 @@ export const Info = ({ boardId }: InfoProps) => {
       </Actions>
     </div>
   );
+};
+
+/**
+ * Opens "Share with a team" for links ending in ?share=1 (Share on /try,
+ * or back from creating a team), once the board has loaded.
+ */
+const useShareOnLoad = (
+  board: { _id: string; title: string; orgId: string } | null | undefined
+) => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { onOpen } = useShareModal();
+  const wantsShare = searchParams.get("share") === "1";
+
+  useEffect(() => {
+    if (!wantsShare || !board) return;
+
+    router.replace(pathname);
+    if (isPersonalWorkspaceId(board.orgId)) {
+      onOpen(board._id, board.title);
+    }
+  }, [wantsShare, board, router, pathname, onOpen]);
 };
 
 export const InfoSkeleton = () => {

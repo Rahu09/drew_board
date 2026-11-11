@@ -12,6 +12,7 @@ import type * as access from "../access.js";
 import type * as board from "../board.js";
 import type * as boards from "../boards.js";
 import type * as liveblocks from "../liveblocks.js";
+import type * as workspace from "../workspace.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   board: typeof board;
   boards: typeof boards;
   liveblocks: typeof liveblocks;
+  workspace: typeof workspace;
 }>;
 
 /**

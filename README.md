@@ -51,11 +51,27 @@ Requires Node.js 24 and pnpm.
 ## Routes
 
 - `/`: public landing page.
-- `/dashboard`: the board list of the active organization (sign-in required). Old links to `/?favorites=true` or `/?search=...` redirect here.
+- `/dashboard`: the boards of the current workspace (sign-in required): your personal boards, or those of the active organization. Old links to `/?favorites=true` or `/?search=...` redirect here.
 - `/board/[boardId]`: a board (sign-in required). Opening a board of another organization you belong to switches to that organization.
-- `/try`: reserved for guest mode (public).
+- `/try`: guest mode (public). The board is kept in this browser's `localStorage` (`board:guest:v1`), not in Convex or Liveblocks. Save and Share open Clerk's sign-in pop-up; after sign-in the board is copied into a new personal board and opened. Share then offers to move it into a team.
+- `POST /api/guest-board`: saves a guest board for the signed-in user (creates the Convex board, then the Liveblocks room with its content).
 
 `proxy.ts` decides which routes are public. Clerk and Convex providers live in `app/(app)/layout.tsx`, so the landing page ships none of their code.
+
+## Workspaces
+
+A board's `orgId` is its workspace: a Clerk organization id, or `user:<userId>` for a personal board (`convex/workspace.ts`). You can always use your personal boards; an organization's boards only while that organization is active.
+
+To share a personal board, its owner moves it into one of their organizations ("Share with a team" in the board menu, or Share on `/try`). The app switches to that organization first, because `board.moveToOrg` only accepts the organization that is active in the caller's token; Convex has no other way to check membership. The board then belongs to the organization and leaves the owner's personal boards.
+
+## Canvas storage
+
+`components/canvas/` draws a board through the `BoardStore` interface (`lib/board-store/`), which has two implementations:
+
+- `liveblocks-store.tsx`: real-time boards (`/board/[boardId]`), with presence and shared history.
+- `local-store.tsx`: the guest board, kept in `localStorage`, with its own undo history.
+
+Guest data is checked with `lib/board-store/validate.ts` when it is loaded and again on the server before it is saved.
 
 ## Scripts
 

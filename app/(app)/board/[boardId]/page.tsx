@@ -5,8 +5,12 @@ import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import { Room } from "@/components/room";
+import { Canvas } from "@/components/canvas/canvas";
+import { Participants } from "@/components/canvas/participants";
+import { CursorsPresence } from "@/components/canvas/cursors-presence";
+import { LiveblocksBoardStoreProvider } from "@/lib/board-store/liveblocks-store";
 
-import { Canvas } from "./_components/canvas";
+import { Info } from "./_components/info";
 import { Loading } from "./_components/loading";
 import { BoardOrgSwitch } from "./_components/board-org-switch";
 
@@ -38,7 +42,13 @@ const BoarIdPage = ({ params }: BoardIdPageProps) => {
 
   return (
     <Room roomId={boardId} fallback={<Loading />}>
-      <Canvas boardId={boardId} />
+      <LiveblocksBoardStoreProvider>
+        <Canvas
+          header={<Info boardId={boardId} />}
+          topRight={<Participants />}
+          overlay={<CursorsPresence />}
+        />
+      </LiveblocksBoardStoreProvider>
     </Room>
   );
 };

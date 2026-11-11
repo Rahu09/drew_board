@@ -2,15 +2,30 @@ import type { UserIdentity } from "convex/server";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
+import { personalWorkspaceId } from "./workspace";
 
 /**
  * The org the user currently has active in Clerk.
  *
  * Comes from the `org_id` claim of Clerk's "convex" JWT template, which
- * Clerk refreshes whenever the user switches organization.
+ * Clerk refreshes whenever the user switches organization. Undefined when
+ * the user is in their personal account.
  */
 export const getActiveOrgId = (identity: UserIdentity): string | undefined =>
-  typeof identity.org_id === "string" ? identity.org_id : undefined;
+  typeof identity.org_id === "string" && identity.org_id
+    ? identity.org_id
+    : undefined;
+
+/**
+ * Whether the caller may use boards of this workspace (see workspace.ts):
+ * their own personal workspace always, an org only while it is active.
+ */
+export const canAccessWorkspace = (
+  identity: UserIdentity,
+  workspaceId: string
+) =>
+  workspaceId === personalWorkspaceId(identity.subject) ||
+  workspaceId === getActiveOrgId(identity);
 
 export const requireIdentity = async (ctx: QueryCtx) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -22,11 +37,17 @@ export const requireIdentity = async (ctx: QueryCtx) => {
   return identity;
 };
 
-/** Throws unless the caller is signed in with `orgId` as their active org. */
-export const requireOrgMember = async (ctx: QueryCtx, orgId: string) => {
+/**
+ * Throws unless the caller may use the workspace: it is their personal one,
+ * or the org that is active in their token.
+ */
+export const requireWorkspaceAccess = async (
+  ctx: QueryCtx,
+  workspaceId: string
+) => {
   const identity = await requireIdentity(ctx);
 
-  if (getActiveOrgId(identity) !== orgId) {
+  if (!canAccessWorkspace(identity, workspaceId)) {
     throw new Error("Unauthorized");
   }
 
@@ -35,8 +56,9 @@ export const requireOrgMember = async (ctx: QueryCtx, orgId: string) => {
 
 /**
  * Loads a board the caller is allowed to use, or returns null when the board
- * does not exist or belongs to an org other than the caller's active org.
- * The two cases are deliberately indistinguishable to the caller.
+ * does not exist or belongs to a workspace the caller can't use (another
+ * user's personal boards, or an org other than the active one). The cases
+ * are deliberately indistinguishable to the caller.
  */
 export const getAccessibleBoard = async (
   ctx: QueryCtx,
@@ -45,7 +67,7 @@ export const getAccessibleBoard = async (
 ): Promise<Doc<"boards"> | null> => {
   const board = await ctx.db.get(id);
 
-  if (!board || board.orgId !== getActiveOrgId(identity)) {
+  if (!board || !canAccessWorkspace(identity, board.orgId)) {
     return null;
   }
 

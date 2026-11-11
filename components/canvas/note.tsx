@@ -1,9 +1,10 @@
 import { Kalam } from "next/font/google";
-import ContentEditable, { ContentEditableEvent } from "react-contenteditable";
 
 import { NoteLayer } from "@/types/canvas";
-import { cn, colorToCss, getContrastingTextColor } from "@/lib/utils";
-import { useMutation } from "@/liveblocks.config";
+import { colorToCss, getContrastingTextColor } from "@/lib/utils";
+import { useBoardStore } from "@/lib/board-store/context";
+
+import { PlainTextEditable } from "./plain-text-editable";
 
 const font = Kalam({
   subsets: ["latin"],
@@ -34,14 +35,10 @@ export const Note = ({
 }: NoteProps) => {
   const { x, y, width, height, fill, value } = layer;
 
-  const updateValue = useMutation(({ storage }, newValue: string) => {
-    const liveLayers = storage.get("layers");
+  const { actions } = useBoardStore();
 
-    liveLayers.get(id)?.set("value", newValue);
-  }, []);
-
-  const handleContentChange = (e: ContentEditableEvent) => {
-    updateValue(e.target.value);
+  const handleContentChange = (text: string) => {
+    actions.updateLayer(id, { value: text });
   };
 
   return (
@@ -57,13 +54,11 @@ export const Note = ({
       }}
       className="shadow-md drop-shadow-xl"
     >
-      <ContentEditable
-        html={value || "Text"}
+      <PlainTextEditable
+        value={value}
+        fallback="Text"
         onChange={handleContentChange}
-        className={cn(
-          "h-full w-full flex items-center justify-center text-center outline-hidden",
-          font.className
-        )}
+        className={font.className}
         style={{
           fontSize: calculateFontSize(width, height),
           color: fill ? getContrastingTextColor(fill) : "#000",

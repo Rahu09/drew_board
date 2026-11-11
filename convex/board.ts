@@ -1,12 +1,19 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import {
   getAccessibleBoard,
+  getActiveOrgId,
   requireBoard,
-  requireOrgMember,
+  requireIdentity,
+  requireWorkspaceAccess,
 } from "./access";
+import {
+  isPersonalWorkspaceId,
+  ORG_NOT_ACTIVE,
+  personalWorkspaceId,
+} from "./workspace";
 
 const images = [
   "/placeholders/1.svg",
@@ -41,11 +48,13 @@ const validateTitle = (rawTitle: string) => {
 
 export const create = mutation({
   args: {
+    // The workspace (see workspace.ts): an org id, or the caller's own
+    // personal workspace id.
     orgId: v.string(),
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await requireOrgMember(ctx, args.orgId);
+    const identity = await requireWorkspaceAccess(ctx, args.orgId);
 
     const randomImage = images[Math.floor(Math.random() * images.length)];
 
@@ -91,6 +100,49 @@ export const update = mutation({
     await ctx.db.patch(board._id, {
       title: validateTitle(args.title),
     });
+
+    return board._id;
+  },
+});
+
+/**
+ * Shares a personal board by moving it into an organization: every member
+ * of that org can then open and edit it, and it stops being personal.
+ *
+ * Only the board's owner can move it, and only into the org that is active
+ * in their token: Convex knows nothing else about org membership, and Clerk
+ * only lets a user activate an org they belong to.
+ */
+export const moveToOrg = mutation({
+  args: { id: v.id("boards"), orgId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const board = await ctx.db.get(args.id);
+
+    if (!board || board.orgId !== personalWorkspaceId(identity.subject)) {
+      throw new Error("Board not found");
+    }
+
+    if (
+      isPersonalWorkspaceId(args.orgId) ||
+      args.orgId !== getActiveOrgId(identity)
+    ) {
+      throw new ConvexError(ORG_NOT_ACTIVE);
+    }
+
+    await ctx.db.patch(board._id, { orgId: args.orgId });
+
+    // Favorites carry the board's workspace for listing; keep them in step.
+    const favorites = await ctx.db
+      .query("userFavorites")
+      .withIndex("by_board", (q) => q.eq("boardId", board._id))
+      .collect();
+
+    await Promise.all(
+      favorites.map((favorite) =>
+        ctx.db.patch(favorite._id, { orgId: args.orgId })
+      )
+    );
 
     return board._id;
   },
@@ -190,7 +242,13 @@ export const findOrg = query({
 
     const board = await ctx.db.get(id);
 
-    if (!board || !args.orgIds.includes(board.orgId)) {
+    // Personal boards need no switch: their owner can always open them
+    // (board.get), and nobody else may learn whose they are.
+    if (
+      !board ||
+      isPersonalWorkspaceId(board.orgId) ||
+      !args.orgIds.includes(board.orgId)
+    ) {
       return null;
     }
 

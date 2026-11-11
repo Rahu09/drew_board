@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { getAll } from "convex-helpers/server/relationships";
 
 import { query } from "./_generated/server";
-import { getActiveOrgId, requireIdentity } from "./access";
+import { canAccessWorkspace, requireIdentity } from "./access";
 
 export const get = query({
   args: {
@@ -13,11 +13,12 @@ export const get = query({
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
 
-    // Only list boards of the caller's active org. Right after switching
-    // org, the client can briefly ask for the new org with the old token, so
-    // return null (the UI treats it as "still loading") instead of throwing;
-    // Convex re-runs the query as soon as the refreshed token arrives.
-    if (getActiveOrgId(identity) !== args.orgId) {
+    // `orgId` is a workspace (see workspace.ts): the caller's personal one,
+    // or their active org. Right after switching org, the client can briefly
+    // ask for the new org with the old token, so return null (the UI treats
+    // it as "still loading") instead of throwing; Convex re-runs the query as
+    // soon as the refreshed token arrives.
+    if (!canAccessWorkspace(identity, args.orgId)) {
       return null;
     }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { RenameModal } from "@/components/modals/rename-modals";
+import { ShareModal } from "@/components/modals/share-modal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -20,6 +21,7 @@ export const ModalProvider = () => {
   return (
     <>
       <RenameModal />
+      <ShareModal />
     </>
   );
 };

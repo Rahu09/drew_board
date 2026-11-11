@@ -1,9 +1,10 @@
 import { Kalam } from "next/font/google";
-import ContentEditable, { ContentEditableEvent } from "react-contenteditable";
 
 import { TextLayer } from "@/types/canvas";
 import { cn, colorToCss } from "@/lib/utils";
-import { useMutation } from "@/liveblocks.config";
+import { useBoardStore } from "@/lib/board-store/context";
+
+import { PlainTextEditable } from "./plain-text-editable";
 
 const font = Kalam({
   subsets: ["latin"],
@@ -34,14 +35,10 @@ export const Text = ({
 }: TextProps) => {
   const { x, y, width, height, fill, value } = layer;
 
-  const updateValue = useMutation(({ storage }, newValue: string) => {
-    const liveLayers = storage.get("layers");
+  const { actions } = useBoardStore();
 
-    liveLayers.get(id)?.set("value", newValue);
-  }, []);
-
-  const handleContentChange = (e: ContentEditableEvent) => {
-    updateValue(e.target.value);
+  const handleContentChange = (text: string) => {
+    actions.updateLayer(id, { value: text });
   };
 
   return (
@@ -55,13 +52,11 @@ export const Text = ({
         outline: selectionColor ? `1px solid ${selectionColor}` : "none",
       }}
     >
-      <ContentEditable
-        html={value || "Text"}
+      <PlainTextEditable
+        value={value}
+        fallback="Text"
         onChange={handleContentChange}
-        className={cn(
-          "h-full w-full flex items-center justify-center text-center drop-shadow-md outline-hidden",
-          font.className
-        )}
+        className={cn(font.className, "drop-shadow-md")}
         style={{
           fontSize: calculateFontSize(width, height),
           color: fill ? colorToCss(fill) : "#000",

@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 import { usePathname, useRouter } from "next/navigation";
-import { Link2, Pencil, Trash2 } from "lucide-react";
+import { Link2, Pencil, Trash2, Users } from "lucide-react";
 import { DropdownMenuContentProps } from "@radix-ui/react-dropdown-menu";
 
 import { ConfirmModal } from "@/components/confirm-modal";
@@ -17,6 +17,8 @@ import { api } from "../convex/_generated/api";
 import { useApiMutation } from "../hooks/use-api-mutation";
 import { Button } from "./ui/button";
 import { useRenameModal } from "@/store/use-rename-modal";
+import { useShareModal } from "@/store/use-share-modal";
+import { isPersonalWorkspaceId } from "@/convex/workspace";
 
 interface ActionsProps {
   children: React.ReactNode;
@@ -24,6 +26,8 @@ interface ActionsProps {
   sideOffset?: DropdownMenuContentProps["sideOffset"];
   id: string;
   title: string;
+  /** The board's workspace; personal boards get "Share with a team". */
+  orgId: string;
 }
 
 export const Actions = ({
@@ -32,8 +36,10 @@ export const Actions = ({
   sideOffset,
   id,
   title,
+  orgId,
 }: ActionsProps) => {
   const { onOpen } = useRenameModal();
+  const shareModal = useShareModal();
   const { mutate, pending } = useApiMutation(api.board.remove);
   const onCopyLink = () => {
     navigator.clipboard
@@ -68,6 +74,15 @@ export const Actions = ({
           <Link2 className="h-4 w-4 mr-2" />
           Copy board link
         </DropdownMenuItem>
+        {isPersonalWorkspaceId(orgId) && (
+          <DropdownMenuItem
+            onClick={() => shareModal.onOpen(id, title)}
+            className="p-3 cursor-pointer"
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Share with a team
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={() => onOpen(id, title)}
           className="p-3 cursor-pointer"

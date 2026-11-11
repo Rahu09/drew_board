@@ -4,7 +4,7 @@ import { memo } from "react";
 
 import { colorToCss } from "@/lib/utils";
 import { LayerType } from "@/types/canvas";
-import { useStorage } from "@/liveblocks.config";
+import { useBoardStore } from "@/lib/board-store/context";
 import { Rectangle } from "./rectangle";
 import { Ellipse } from "./ellipse";
 import { Note } from "./note";
@@ -19,7 +19,7 @@ interface LayerPreviewProps {
 
 export const LayerPreview = memo(
   ({ id, onLayerPointerDown, selectionColor }: LayerPreviewProps) => {
-    const layer = useStorage((root) => root.layers[id]);
+    const layer = useBoardStore().useLayer(id);
 
     if (!layer) {
       return null;

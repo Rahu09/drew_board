@@ -1,9 +1,9 @@
 "use client";
 
 import { use } from "react";
-import { useOrganization } from "@clerk/nextjs";
 
-import { EmptyOrg } from "./_component/empty-org";
+import { useWorkspace } from "@/hooks/use-workspace";
+
 import { BoardList } from "./_component/board-list";
 
 interface DashboardPageProps {
@@ -16,15 +16,11 @@ interface DashboardPageProps {
 
 const DashboardPage = ({ searchParams }: DashboardPageProps) => {
   const query = use(searchParams);
-  const { organization } = useOrganization();
+  const workspace = useWorkspace();
 
   return (
     <div className="flex-1 h-[calc(100%-80px)] p-6">
-      {!organization ? (
-        <EmptyOrg />
-      ) : (
-        <BoardList orgId={organization.id} query={query} />
-      )}
+      {workspace && <BoardList workspace={workspace} query={query} />}
     </div>
   );
 };

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import Image from "next/image";
 import {
   UserButton,
   OrganizationSwitcher,
@@ -14,12 +16,15 @@ export const Navbar = () => {
 
   return (
     <div className="flex items-center gap-x-4 p-5">
+      {/* Below lg the sidebar with the logo is hidden. */}
+      <Link href="/" aria-label="Board home page" className="lg:hidden shrink-0">
+        <Image src="/logo.svg" alt="" height={36} width={36} />
+      </Link>
       <div className="hidden lg:flex lg:flex-1">
         <SearchInput />
       </div>
-      <div className="block lg:hidden flex-1">
+      <div className="block lg:hidden flex-1 min-w-0">
         <OrganizationSwitcher
-          hidePersonal
           appearance={{
             elements: {
               rootBox: {
