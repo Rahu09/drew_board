@@ -123,6 +123,25 @@ export const Note = ({
     layer.fontFamily,
   ]);
 
+  // Everything but the text is plain SVG behind it. Safari and every
+  // iPhone browser (WebKit) draw HTML inside <foreignObject> in the wrong
+  // place, unscaled by zoom, once it has a filter, shadow, opacity or
+  // position; so the HTML below stays plain.
+  const clean = !paper && (
+    <rect
+      x={isOutline ? x + 1 : x}
+      y={isOutline ? y + 1 : y}
+      width={isOutline ? Math.max(width - 2, 0) : width}
+      height={isOutline ? Math.max(height - 2, 0) : height}
+      rx={isOutline ? Math.max(radius, 4) : radius}
+      fill={isOutline ? "none" : color}
+      stroke={isOutline ? color : "none"}
+      strokeWidth={isOutline ? 2 : 0}
+      className={isOutline ? undefined : "drop-shadow-md"}
+      pointerEvents="none"
+    />
+  );
+
   const foreignObject = (
     <foreignObject
       ref={ref}
@@ -132,16 +151,8 @@ export const Note = ({
       width={width}
       height={height}
       onPointerDown={(e) => onPointerDown(e, id)}
-      style={{
-        outline: selectionColor ? `1px solid ${selectionColor}` : "none",
-        // Clean paper is the box itself; hand-drawn paper is drawn behind.
-        backgroundColor: paper || isOutline ? "transparent" : color,
-        border: !paper && isOutline ? `2px solid ${color}` : undefined,
-        borderRadius: paper ? undefined : isOutline ? Math.max(radius, 4) : radius,
-      }}
-      className={paper || isOutline ? undefined : "shadow-md drop-shadow-xl"}
     >
-      <div className="relative h-full w-full flex flex-col">
+      <div className="h-full w-full flex flex-col">
         <PlainTextEditable
           value={value}
           fallback="Text"
@@ -175,26 +186,57 @@ export const Note = ({
             paddingTop: 6,
           }}
         />
-        {/* Room for the date: the text can never reach it. */}
+        {/* The date's own strip: the text can never reach it. */}
         <div
-          aria-hidden
-          className="shrink-0"
-          style={{ height: createdAt !== undefined ? NOTE_DATE_SPACE : 6 }}
-        />
-        {createdAt !== undefined && (
-          <time
-            dateTime={new Date(createdAt).toISOString()}
-            className="absolute bottom-[3px] right-[5px] leading-none pointer-events-none select-none opacity-60 tabular-nums"
-            style={{ fontSize: NOTE_DATE_FONT_SIZE, color: textColor }}
-          >
-            {formatNoteDate(createdAt)}
-          </time>
-        )}
+          aria-hidden={createdAt === undefined}
+          className="shrink-0 flex items-end justify-end pointer-events-none select-none"
+          style={{
+            height: createdAt !== undefined ? NOTE_DATE_SPACE : 6,
+            paddingRight: 5,
+            paddingBottom: 3,
+          }}
+        >
+          {createdAt !== undefined && (
+            <time
+              dateTime={new Date(createdAt).toISOString()}
+              className="leading-none tabular-nums"
+              style={{
+                fontSize: NOTE_DATE_FONT_SIZE,
+                // Faded with the color, not opacity (see above).
+                color: `color-mix(in srgb, ${textColor} 60%, transparent)`,
+              }}
+            >
+              {formatNoteDate(createdAt)}
+            </time>
+          )}
+        </div>
       </div>
     </foreignObject>
   );
 
-  if (!paper) return foreignObject;
+  // Someone else's selection.
+  const outline = selectionColor && (
+    <rect
+      x={x - 1}
+      y={y - 1}
+      width={width + 2}
+      height={height + 2}
+      fill="none"
+      stroke={selectionColor}
+      strokeWidth={1}
+      pointerEvents="none"
+    />
+  );
+
+  if (!paper) {
+    return (
+      <g>
+        {clean}
+        {foreignObject}
+        {outline}
+      </g>
+    );
+  }
 
   return (
     <g>
@@ -215,6 +257,7 @@ export const Note = ({
         ))}
       </g>
       {foreignObject}
+      {outline}
     </g>
   );
 };

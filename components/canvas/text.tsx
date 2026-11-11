@@ -47,39 +47,49 @@ export const Text = ({
   }, [actions, fontSize, height, id, readOnly, value, width, layer.fontFamily]);
 
   return (
-    <foreignObject
-      ref={ref}
-      data-layer-id={id}
-      x={x}
-      y={y}
-      width={width}
-      height={height}
-      onPointerDown={(e) => onPointerDown(e, id)}
-      style={{
-        outline: selectionColor ? `1px solid ${selectionColor}` : "none",
-      }}
-    >
-      <PlainTextEditable
-        value={value}
-        fallback="Text"
-        readOnly={readOnly}
-        onChange={(text) => {
-          // One change for the text and the height it needs, so a single
-          // undo takes back both.
-          const grow = overflowOf(ref.current, fontSize);
-          actions.updateLayer(
-            id,
-            grow > 0 ? { value: text, height: height + grow } : { value: text }
-          );
-        }}
-        className="drop-shadow-md"
-        style={{
-          fontSize,
-          fontFamily: layerFontFamily(layer.fontFamily),
-          textAlign: layerTextAlign(layer.textAlign),
-          color: fill ? colorToCss(fill) : "#000",
-        }}
-      />
-    </foreignObject>
+    <g>
+      <foreignObject
+        ref={ref}
+        data-layer-id={id}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        onPointerDown={(e) => onPointerDown(e, id)}
+      >
+        <PlainTextEditable
+          value={value}
+          fallback="Text"
+          readOnly={readOnly}
+          onChange={(text) => {
+            // One change for the text and the height it needs, so a single
+            // undo takes back both.
+            const grow = overflowOf(ref.current, fontSize);
+            actions.updateLayer(
+              id,
+              grow > 0 ? { value: text, height: height + grow } : { value: text }
+            );
+          }}
+          style={{
+            fontSize,
+            fontFamily: layerFontFamily(layer.fontFamily),
+            textAlign: layerTextAlign(layer.textAlign),
+            color: fill ? colorToCss(fill) : "#000",
+          }}
+        />
+      </foreignObject>
+      {selectionColor && (
+        <rect
+          x={x - 1}
+          y={y - 1}
+          width={width + 2}
+          height={height + 2}
+          fill="none"
+          stroke={selectionColor}
+          strokeWidth={1}
+          pointerEvents="none"
+        />
+      )}
+    </g>
   );
 };
