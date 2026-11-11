@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as access from "../access.js";
 import type * as board from "../board.js";
 import type * as boards from "../boards.js";
+import type * as liveblocks from "../liveblocks.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +20,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
   board: typeof board;
   boards: typeof boards;
+  liveblocks: typeof liveblocks;
 }>;
 
 /**

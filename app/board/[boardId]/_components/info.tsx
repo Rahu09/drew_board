@@ -11,7 +11,6 @@ import { Hint } from "@/components/hints";
 import { api } from "@/convex/_generated/api";
 import { Actions } from "@/components/actions";
 import { Button } from "@/components/ui/button";
-import { Id } from "@/convex/_generated/dataModel";
 import { useRenameModal } from "@/store/use-rename-modal";
 
 interface InfoProps {
@@ -31,7 +30,7 @@ export const Info = ({ boardId }: InfoProps) => {
   const { onOpen } = useRenameModal();
 
   const data = useQuery(api.board.get, {
-    id: boardId as Id<"boards">,
+    id: boardId,
   });
 
   if (!data) return <InfoSkeleton />;

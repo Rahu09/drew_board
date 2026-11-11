@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Board
 
-## Getting Started
+A real-time collaborative whiteboard. Teams create boards inside an organization and draw on them together: shapes, sticky notes, text and freehand pen, with live cursors and undo/redo.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 16** (App Router) and **React 19**
+- **Clerk** for sign-in and organizations
+- **Convex** for board data (titles, favorites, search)
+- **Liveblocks** for the live canvas (shapes, presence, cursors)
+- **Tailwind CSS 4** with shadcn/ui components
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Requires Node.js 24 and pnpm.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+1. Install dependencies:
 
-## Learn More
+   ```bash
+   pnpm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. Create `.env.local` with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   | Variable | Where to get it |
+   | --- | --- |
+   | `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL` | written by `npx convex dev` |
+   | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Clerk dashboard, API keys |
+   | `LIVEBLOCKS_API_KEY` | Liveblocks dashboard, secret key (`sk_...`) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+3. In the Clerk dashboard, create a JWT template named `convex` that includes the active organization:
 
-## Deploy on Vercel
+   ```json
+   { "org_id": "{{org.id}}", "org_role": "{{org.role}}" }
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   Convex uses `org_id` to make sure users only see boards of their active organization.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+4. In the Convex dashboard (Settings, Environment Variables), set `LIVEBLOCKS_SECRET_KEY` to the same Liveblocks secret key. Convex uses it to delete a board's Liveblocks room when the board is deleted.
+
+5. Run Convex and Next.js in two terminals:
+
+   ```bash
+   npx convex dev
+   ```
+
+   ```bash
+   pnpm dev
+   ```
+
+## Scripts
+
+- `pnpm dev`: development server
+- `pnpm build`: production build
+- `pnpm lint`: ESLint
+
+## Deployment
+
+Deployed on Vercel with the build command `npx convex deploy --cmd 'npm run build'`. Set `CONVEX_DEPLOY_KEY` and the variables above in the Vercel project, and `LIVEBLOCKS_SECRET_KEY` in the production Convex deployment.

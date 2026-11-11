@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import {
+  getAccessibleBoard,
+  requireBoard,
+  requireOrgMember,
+} from "./access";
 
 const images = [
   "/placeholders/1.svg",
@@ -15,102 +21,85 @@ const images = [
   "/placeholders/10.svg",
 ];
 
+const MAX_TITLE_LENGTH = 60;
+
+const validateTitle = (rawTitle: string) => {
+  const title = rawTitle.trim();
+
+  if (!title) {
+    throw new Error("Title is required");
+  }
+
+  if (title.length > MAX_TITLE_LENGTH) {
+    throw new Error(
+      `Title cannot be longer than ${MAX_TITLE_LENGTH} characters`
+    );
+  }
+
+  return title;
+};
+
 export const create = mutation({
   args: {
     orgId: v.string(),
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
+    const identity = await requireOrgMember(ctx, args.orgId);
 
     const randomImage = images[Math.floor(Math.random() * images.length)];
 
-    console.log(randomImage, "TEST");
-
-    const board = await ctx.db.insert("boards", {
-      title: args.title,
+    return await ctx.db.insert("boards", {
+      title: validateTitle(args.title),
       orgId: args.orgId,
       authorId: identity.subject,
-      authorName: identity.name!,
+      // Not every Clerk user has a name (e.g. email-only sign-ups).
+      authorName: identity.name ?? identity.email ?? "Anonymous",
       imageUrl: randomImage,
     });
-
-    return board;
   },
 });
 
 export const remove = mutation({
   args: { id: v.id("boards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const { board } = await requireBoard(ctx, args.id);
 
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
-    const userId = identity.subject;
-
-    const existingFavorite = await ctx.db
+    // Remove every user's favorite of this board, not just the caller's,
+    // so nobody is left with a favorite pointing at a deleted board.
+    const favorites = await ctx.db
       .query("userFavorites")
-      .withIndex("by_user_board", (q) =>
-        q.eq("userId", userId).eq("boardId", args.id)
-      )
-      .unique();
+      .withIndex("by_board", (q) => q.eq("boardId", board._id))
+      .collect();
 
-    if (existingFavorite) {
-      await ctx.db.delete(existingFavorite._id);
-    }
+    await Promise.all(favorites.map((favorite) => ctx.db.delete(favorite._id)));
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete(board._id);
+
+    // The Liveblocks room id is the board id (see components/room.tsx).
+    await ctx.scheduler.runAfter(0, internal.liveblocks.deleteRoom, {
+      roomId: board._id,
+    });
   },
 });
 
 export const update = mutation({
   args: { id: v.id("boards"), title: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const { board } = await requireBoard(ctx, args.id);
 
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
-    const title = args.title.trim();
-
-    if (!title) {
-      throw new Error("Title is required");
-    }
-
-    if (title.length > 60) {
-      throw new Error("Title cannot be longer than 60 characters");
-    }
-
-    const board = await ctx.db.patch(args.id, {
-      title: args.title,
+    await ctx.db.patch(board._id, {
+      title: validateTitle(args.title),
     });
 
-    return board;
+    return board._id;
   },
 });
 
 export const favorite = mutation({
-  args: { id: v.id("boards"), orgId: v.string() },
+  args: { id: v.id("boards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
-    const board = await ctx.db.get(args.id);
-
-    if (!board) {
-      throw new Error("Board not found");
-    }
-
+    const { identity, board } = await requireBoard(ctx, args.id);
     const userId = identity.subject;
 
     const existingFavorite = await ctx.db
@@ -127,28 +116,17 @@ export const favorite = mutation({
     await ctx.db.insert("userFavorites", {
       userId,
       boardId: board._id,
-      orgId: args.orgId,
+      orgId: board.orgId,
     });
 
-    return board;
+    return board._id;
   },
 });
 
 export const unfavorite = mutation({
   args: { id: v.id("boards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
-    const board = await ctx.db.get(args.id);
-
-    if (!board) {
-      throw new Error("Board not found");
-    }
-
+    const { identity, board } = await requireBoard(ctx, args.id);
     const userId = identity.subject;
 
     const existingFavorite = await ctx.db
@@ -164,15 +142,25 @@ export const unfavorite = mutation({
 
     await ctx.db.delete(existingFavorite._id);
 
-    return board;
+    return board._id;
   },
 });
 
+/**
+ * Returns the board, or null when it does not exist, the id is malformed, or
+ * the caller is not signed in to the board's org. Never throws, so the board
+ * page can show a "not found" state instead of crashing.
+ */
 export const get = query({
-  args: { id: v.id("boards") },
+  args: { id: v.string() },
   handler: async (ctx, args) => {
-    const board = ctx.db.get(args.id);
+    const identity = await ctx.auth.getUserIdentity();
+    const id = ctx.db.normalizeId("boards", args.id);
 
-    return board;
+    if (!identity || !id) {
+      return null;
+    }
+
+    return await getAccessibleBoard(ctx, identity, id);
   },
 });

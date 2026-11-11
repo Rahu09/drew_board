@@ -3,33 +3,47 @@
 import qs from "query-string";
 import { Search } from "lucide-react";
 import { useDebounceValue } from "usehooks-ts";
-import { useRouter } from "next/navigation";
-import { ChangeEvent, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChangeEvent, useEffect, useEffectEvent, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 
 export const SearchInput = () => {
   const router = useRouter();
-  const [value, setValue] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [value, setValue] = useState(searchParams.get("search") ?? "");
   const [debouncedValue] = useDebounceValue(value, 500);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
   };
 
-  useEffect(() => {
+  // An effect event reads the latest URL without re-running the effect when
+  // the URL changes (e.g. clicking "Favorite boards"), so only typing updates
+  // the URL.
+  const updateSearchParam = useEffectEvent((search: string) => {
+    // Nothing typed since the URL was last set: don't navigate. This also
+    // stops the first render from replacing ?favorites=true with "/".
+    if (search === (searchParams.get("search") ?? "")) {
+      return;
+    }
+
     const url = qs.stringifyUrl(
       {
-        url: "/",
-        query: {
-          search: debouncedValue,
-        },
+        url: pathname,
+        // Keep the other params (like favorites) and only change search.
+        query: { ...qs.parse(searchParams.toString()), search },
       },
       { skipEmptyString: true, skipNull: true }
     );
 
     router.push(url);
-  }, [debouncedValue, router]);
+  });
+
+  useEffect(() => {
+    updateSearchParam(debouncedValue);
+  }, [debouncedValue]);
 
   return (
     <div className="w-full relative">

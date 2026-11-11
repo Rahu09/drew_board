@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { usePathname, useRouter } from "next/navigation";
 import { Link2, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenuContentProps } from "@radix-ui/react-dropdown-menu";
 
@@ -40,7 +41,16 @@ export const Actions = ({
       .then(() => toast.success("Link copied"))
       .catch(() => toast.error("Failed to copy link"));
   };
+  const router = useRouter();
+  const pathname = usePathname();
+
   const onDelete = () => {
+    // Deleting the board that is open: go back to the dashboard first, so the
+    // page doesn't flash "Board not found" when the board disappears.
+    if (pathname === `/board/${id}`) {
+      router.push("/");
+    }
+
     mutate({ id })
       .then(() => toast.success("Board deleted"))
       .catch(() => toast.error("Failed to delete board"));

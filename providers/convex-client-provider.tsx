@@ -3,7 +3,6 @@
 import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { AuthLoading, Authenticated, ConvexReactClient } from "convex/react";
-import { ConvexClient } from "convex/browser";
 import { Loading } from "@/components/auth/loading";
 
 interface ConvexClientProviderProps {

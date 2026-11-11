@@ -24,7 +24,8 @@ export const BoardList = ({ orgId, query }: BoardListProps) => {
     ...query,
   });
 
-  if (data === undefined) {
+  // undefined: still loading. null: the org switch has not reached Convex yet.
+  if (data === undefined || data === null) {
     return (
       <div>
         <h2 className="text-3xl">
