@@ -289,6 +289,91 @@ const layersUnder = (from: Point, to: Point) => {
   return ids;
 };
 
+/** The layer within `radius` screen pixels of a point, for fingers. */
+const layerNear = (x: number, y: number, radius: number) => {
+  const offsets = [
+    [0, 0],
+    [radius, 0],
+    [-radius, 0],
+    [0, radius],
+    [0, -radius],
+    [radius * 0.7, radius * 0.7],
+    [-radius * 0.7, radius * 0.7],
+    [radius * 0.7, -radius * 0.7],
+    [-radius * 0.7, -radius * 0.7],
+  ];
+
+  for (const [dx, dy] of offsets) {
+    const id = document
+      .elementFromPoint(x + dx, y + dy)
+      ?.closest("[data-layer]")
+      ?.getAttribute("data-layer");
+    if (id && id !== "draft") return id;
+  }
+
+  return null;
+};
+
+/** How far (screen pixels) a finger may wander and still be a tap. */
+const TAP_SLOP = 8;
+
+/**
+ * Phones only open the keyboard for a field focused during the tap
+ * itself, but a new text layer renders a moment later. Focusing a hidden
+ * field now opens the keyboard; focusLayerText then moves the caret over.
+ */
+const openKeyboard = () => {
+  let field = document.getElementById("canvas-keyboard-primer");
+  if (!field) {
+    field = document.createElement("input");
+    field.id = "canvas-keyboard-primer";
+    field.setAttribute("aria-hidden", "true");
+    field.tabIndex = -1;
+    // 16px: iOS zooms the page into smaller fields.
+    field.style.cssText =
+      "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0;pointer-events:none";
+    document.body.appendChild(field);
+  }
+  field.focus({ preventScroll: true });
+};
+
+/** Puts the caret where a finger tapped a text or note layer. */
+const editLayerTextAt = (id: string, x: number, y: number) => {
+  const editable = document.querySelector<HTMLElement>(
+    `[data-layer-id="${CSS.escape(id)}"] [contenteditable]`
+  );
+  if (!editable || !editable.isContentEditable) return;
+
+  editable.focus({ preventScroll: true });
+
+  const doc = document as Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  let caret: Range | null = null;
+  const position = doc.caretPositionFromPoint?.(x, y);
+  if (position) {
+    caret = document.createRange();
+    caret.setStart(position.offsetNode, position.offset);
+  } else {
+    caret = document.caretRangeFromPoint?.(x, y) ?? null;
+  }
+
+  const selection = window.getSelection();
+  if (caret && editable.contains(caret.startContainer)) {
+    caret.collapse(true);
+  } else {
+    // Tapped the empty part of the box: caret at the end.
+    caret = document.createRange();
+    caret.selectNodeContents(editable);
+    caret.collapse(false);
+  }
+  selection?.removeAllRanges();
+  selection?.addRange(caret);
+};
+
 type ConfirmRequest = {
   title: string;
   description: string;
@@ -411,6 +496,14 @@ export const Canvas = ({
   const pinch = useRef<Pinch | null>(null);
   // After a pinch, ignore the fingers until all of them are lifted.
   const ignoreTouches = useRef(false);
+  // A finger that went down to move layers: where, so a small wobble
+  // doesn't move them and a tap on text can put the caret there.
+  const fingerDown = useRef<{
+    id: string | null;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
   // The tool to go back to after panning with the middle mouse button.
   const stateBeforePan = useRef<CanvasState>({ mode: CanvasMode.None });
   // For work that finishes later (image uploads).
@@ -1026,6 +1119,43 @@ export const Canvas = ({
         return;
       }
 
+      // Inside the selection's box: move it (like Excalidraw), so an
+      // outlined shape can be dragged by its middle. Fingers also pick up
+      // a layer they land just next to.
+      const selected = actions.getSelection();
+      const snapshot = actions.getSnapshot();
+      const bounds = boundingBox(
+        selected
+          .map((id) => snapshot.layers[id])
+          .filter((layer) => layer !== undefined)
+      );
+      const pad = 6 / camera.scale;
+      const inSelection =
+        bounds !== null &&
+        point.x >= bounds.x - pad &&
+        point.x <= bounds.x + bounds.width + pad &&
+        point.y >= bounds.y - pad &&
+        point.y <= bounds.y + bounds.height + pad;
+      const nearby =
+        !inSelection && e.pointerType === "touch"
+          ? layerNear(e.clientX, e.clientY, 14)
+          : null;
+
+      if (inSelection || nearby) {
+        if (nearby) actions.setSelection([nearby], { addToHistory: true });
+        actions.pauseHistory();
+        if (e.pointerType === "touch") {
+          fingerDown.current = {
+            id: nearby,
+            x: e.clientX,
+            y: e.clientY,
+            moved: false,
+          };
+        }
+        setCanvasState({ mode: CanvasMode.Translating, current: point });
+        return;
+      }
+
       setCanvasState({ origin: point, mode: CanvasMode.Pressing });
     },
     [actions, camera, canvasState, laser, readOnly, startDrawing]
@@ -1034,6 +1164,8 @@ export const Canvas = ({
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
       const point = pointerEventToCanvasPoint(e, camera);
+      const finger = fingerDown.current;
+      fingerDown.current = null;
 
       if (
         canvasState.mode === CanvasMode.None ||
@@ -1044,6 +1176,13 @@ export const Canvas = ({
       } else if (canvasState.mode === CanvasMode.Pencil) {
         insertPath();
       } else if (canvasState.mode === CanvasMode.Creating) {
+        if (
+          e.pointerType === "touch" &&
+          (canvasState.layerType === LayerType.Text ||
+            canvasState.layerType === LayerType.Note)
+        ) {
+          openKeyboard();
+        }
         finishCreating({
           ...canvasState,
           current: point,
@@ -1067,6 +1206,11 @@ export const Canvas = ({
       }
 
       actions.resumeHistory();
+
+      // A tap (not a drag) on text or a note: edit it, caret where tapped.
+      if (finger?.id && !finger.moved) {
+        editLayerTextAt(finger.id, e.clientX, e.clientY);
+      }
     },
     [actions, camera, canvasState, finishCreating, unselectLayers, insertPath]
   );
@@ -1094,6 +1238,15 @@ export const Canvas = ({
 
       if (!actions.getSelection().includes(layerId)) {
         actions.setSelection([layerId], { addToHistory: true });
+      }
+
+      if (e.pointerType === "touch") {
+        fingerDown.current = {
+          id: layerId,
+          x: e.clientX,
+          y: e.clientY,
+          moved: false,
+        };
       }
 
       setCanvasState({ mode: CanvasMode.Translating, current: point });
@@ -1145,6 +1298,13 @@ export const Canvas = ({
       } else if (canvasState.mode === CanvasMode.SelectionNet) {
         updateSelectionNet(current, canvasState.origin);
       } else if (canvasState.mode === CanvasMode.Translating) {
+        // A finger wobbles while tapping: only a real drag moves layers.
+        const finger = fingerDown.current;
+        if (finger && !finger.moved) {
+          const at = { x: e.clientX, y: e.clientY };
+          if (distanceBetween(finger, at) < TAP_SLOP) return;
+          finger.moved = true;
+        }
         actions.translateLayers(
           actions.getSelection(),
           offsetBetween(lastPointOf(canvasState), current)
@@ -1177,12 +1337,48 @@ export const Canvas = ({
     actions.setCursor(null);
   }, [actions]);
 
+  // The browser took the touch over (e.g. a long press): drop what it was
+  // doing without finishing it, and keep the tool.
+  const onPointerCancel = useCallback(() => {
+    fingerDown.current = null;
+    eraser.current = null;
+    actions.setPencilDraft(null);
+    actions.resumeHistory();
+    setCanvasState((state) => {
+      switch (state.mode) {
+        case CanvasMode.Creating:
+          return { mode: CanvasMode.Inserting, layerType: state.layerType };
+        case CanvasMode.Eraser:
+          return { mode: CanvasMode.Eraser, erasing: null };
+        case CanvasMode.Panning:
+          return stateBeforePan.current;
+        case CanvasMode.Pencil:
+        case CanvasMode.Hand:
+        case CanvasMode.Laser:
+        case CanvasMode.Inserting:
+        case CanvasMode.Comment:
+          return state;
+        default:
+          return { mode: CanvasMode.None };
+      }
+    });
+  }, [actions]);
+
   // Two-finger touch: pinch to zoom and drag to pan. These run in the
   // capture phase, before layers and the canvas see the event, and stop it
   // while a pinch is going on.
   const onTouchDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.pointerType !== "touch") return;
+
+      // The first finger of a touch: no other can be down. Forget fingers
+      // whose lift never reached the canvas, or every later touch would
+      // count as a second finger (a pinch) and do nothing.
+      if (e.isPrimary) {
+        touches.current.clear();
+        pinch.current = null;
+        ignoreTouches.current = false;
+      }
 
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1778,6 +1974,7 @@ export const Canvas = ({
           onPointerLeave={onPointerLeave}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
           onPointerDownCapture={onTouchDown}
           onPointerMoveCapture={onTouchMove}
           onPointerUpCapture={onTouchEnd}

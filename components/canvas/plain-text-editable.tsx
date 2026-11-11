@@ -34,6 +34,25 @@ export const layerText = (value: string | undefined) => {
   return (doc.body.textContent ?? "").replace(/^\n/, "");
 };
 
+/**
+ * "plaintext-only" where the browser has it. Browsers without it treat the
+ * value as "not editable" (some older phone browsers), so they get a plain
+ * contentEditable and pasting is made plain by hand.
+ */
+let plaintextOnly: boolean | undefined;
+const supportsPlaintextOnly = () => {
+  if (plaintextOnly === undefined) {
+    try {
+      const probe = document.createElement("div");
+      probe.contentEditable = "plaintext-only";
+      plaintextOnly = probe.contentEditable === "plaintext-only";
+    } catch {
+      plaintextOnly = false;
+    }
+  }
+  return plaintextOnly;
+};
+
 interface PlainTextEditableProps {
   /** The stored layer value. */
   value: string | undefined;
@@ -70,6 +89,12 @@ export const PlainTextEditable = ({
     const element = ref.current;
     if (!element) return;
 
+    if (!readOnly) {
+      element.contentEditable = supportsPlaintextOnly()
+        ? "plaintext-only"
+        : "true";
+    }
+
     const text =
       value !== undefined && value === typed.current
         ? value
@@ -78,7 +103,7 @@ export const PlainTextEditable = ({
     if (element.innerText !== text) {
       element.textContent = text;
     }
-  }, [value, fallback]);
+  }, [value, fallback, readOnly]);
 
   return (
     <div
@@ -86,6 +111,15 @@ export const PlainTextEditable = ({
       contentEditable={readOnly ? false : "plaintext-only"}
       suppressContentEditableWarning
       spellCheck={false}
+      onPaste={(e) => {
+        if (supportsPlaintextOnly()) return;
+        e.preventDefault();
+        document.execCommand(
+          "insertText",
+          false,
+          e.clipboardData.getData("text/plain")
+        );
+      }}
       onInput={(e) => {
         const text = e.currentTarget.innerText;
         typed.current = text;
