@@ -8,7 +8,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { Layer } from "@/types/canvas";
 
-import { boundingBox, moveIdsToBack, moveIdsToFront } from "./bounds";
+import { boundingBox, moveIds } from "./bounds";
 import { BoardStoreContext } from "./context";
 import { parseSnapshot } from "./validate";
 import {
@@ -64,7 +64,10 @@ const writeGuestBoard = (snapshot: BoardSnapshot) => {
 };
 
 /** What undo/redo restores: the content plus the selection. */
-type HistoryEntry = BoardSnapshot & { selection: string[] };
+type HistoryEntry = Required<Omit<BoardSnapshot, "background">> & {
+  background: string | null;
+  selection: string[];
+};
 
 type LocalState = HistoryEntry & {
   pencilDraft: PencilDraft | null;
@@ -78,12 +81,23 @@ type LocalState = HistoryEntry & {
 const entryOf = (state: LocalState): HistoryEntry => ({
   layers: state.layers,
   layerIds: state.layerIds,
+  background: state.background,
   selection: state.selection,
 });
 
+/** The content of the state, as saved. */
+const snapshotOf = ({
+  layers,
+  layerIds,
+  background,
+}: HistoryEntry): BoardSnapshot =>
+  background ? { layers, layerIds, background } : { layers, layerIds };
+
 const createLocalStore = (initial: BoardSnapshot) =>
   createStore<LocalState>(() => ({
-    ...initial,
+    layers: initial.layers,
+    layerIds: initial.layerIds,
+    background: initial.background ?? null,
     selection: [],
     pencilDraft: null,
     past: [],
@@ -182,13 +196,29 @@ const createActions = (store: LocalStore): BoardActions => {
         selection: [],
       });
     },
-    bringToFront: (ids) => {
+    moveLayers: (ids, move) => {
       record();
-      set({ layerIds: moveIdsToFront(get().layerIds, ids) });
+      set({ layerIds: moveIds(get().layerIds, ids, move) });
     },
-    sendToBack: (ids) => {
+    setBackground: (color) => {
+      if (get().background === color) return;
       record();
-      set({ layerIds: moveIdsToBack(get().layerIds, ids) });
+      set({ background: color });
+    },
+    replaceContent: (snapshot) => {
+      const layerIds = snapshot.layerIds
+        .filter((id) => snapshot.layers[id])
+        .slice(0, MAX_LAYERS);
+
+      record();
+      set({
+        layers: Object.fromEntries(
+          layerIds.map((id) => [id, snapshot.layers[id]])
+        ),
+        layerIds,
+        background: snapshot.background ?? null,
+        selection: [],
+      });
     },
     setSelection: (ids, options) => {
       if (options?.addToHistory) {
@@ -198,15 +228,18 @@ const createActions = (store: LocalStore): BoardActions => {
       set({ selection: ids });
     },
     getSelection: () => get().selection,
-    getSnapshot: () => {
-      const { layers, layerIds } = get();
-      return { layers, layerIds };
-    },
+    getSnapshot: () => snapshotOf(get()),
     setCursor: () => {
       // Nobody else to show the cursor to.
     },
     setPencilDraft: (pencilDraft) => set({ pencilDraft }),
     getPencilDraft: () => get().pencilDraft,
+    setView: () => {
+      // Nobody to follow this board.
+    },
+    setLaser: () => {
+      // Nobody else to point at things for.
+    },
     undo: () => {
       const state = get();
       const previous = state.past.at(-1);
@@ -257,6 +290,12 @@ const readHooks = {
   useLayerIds: () => useLocalState((s) => s.layerIds),
   useLayer: (id: string) => useLocalState((s) => s.layers[id]),
   useSelection: () => useLocalState((s) => s.selection),
+  useSelectedLayers: () =>
+    useLocalState(
+      useShallow((s) =>
+        s.selection.map((id) => s.layers[id]).filter((layer) => !!layer)
+      )
+    ),
   useSelectionBounds: () =>
     useLocalState(
       useShallow((s) =>
@@ -266,6 +305,8 @@ const readHooks = {
       )
     ),
   usePencilDraft: () => useLocalState((s) => s.pencilDraft),
+  useBackground: () => useLocalState((s) => s.background),
+  useOtherView: () => undefined,
   useLayerCount: () => useLocalState((s) => s.layerIds.length),
   useCanUndo: () => useLocalState((s) => s.past.length > 0),
   useCanRedo: () => useLocalState((s) => s.future.length > 0),
@@ -278,8 +319,7 @@ const createPersistence = (store: LocalStore) => {
 
   const write = () => {
     timer = null;
-    const { layers, layerIds } = store.getState();
-    writeGuestBoard({ layers, layerIds });
+    writeGuestBoard(snapshotOf(store.getState()));
   };
 
   return {
@@ -327,13 +367,22 @@ export const useGuestBoard = (): GuestBoardControls => {
 /**
  * Board store kept in this browser. Must render on the client only (it reads
  * localStorage when it is created).
+ *
+ * With `initial`, the board starts from that snapshot instead (read-only
+ * share links); `persist={false}` keeps it out of localStorage.
  */
 export const LocalBoardStoreProvider = ({
   children,
+  initial,
+  persist = true,
 }: {
   children: React.ReactNode;
+  initial?: BoardSnapshot;
+  persist?: boolean;
 }) => {
-  const [store] = useState(() => createLocalStore(loadGuestBoard()));
+  const [store] = useState(() =>
+    createLocalStore(initial ?? loadGuestBoard())
+  );
   const [persistence] = useState(() => createPersistence(store));
 
   const boardStore = useMemo<BoardStore>(
@@ -354,10 +403,13 @@ export const LocalBoardStoreProvider = ({
   // Save content changes, and flush when the page is hidden or the provider
   // unmounts, so the last change isn't lost.
   useEffect(() => {
+    if (!persist) return;
+
     const unsubscribe = store.subscribe((state, previous) => {
       if (
         state.layers !== previous.layers ||
-        state.layerIds !== previous.layerIds
+        state.layerIds !== previous.layerIds ||
+        state.background !== previous.background
       ) {
         persistence.schedule();
       }
@@ -370,7 +422,7 @@ export const LocalBoardStoreProvider = ({
       unsubscribe();
       window.removeEventListener("pagehide", persistence.flush);
     };
-  }, [store, persistence]);
+  }, [store, persistence, persist]);
 
   return (
     <LocalStoreContext.Provider value={store}>

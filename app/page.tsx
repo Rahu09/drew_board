@@ -15,16 +15,16 @@ export default async function LandingPage() {
   const signedIn = userId !== null;
 
   return (
-    <div className="min-h-full bg-white">
+    <div className="min-h-full bg-background">
       <SiteHeader signedIn={signedIn} />
       <main>
         <section className="relative overflow-hidden">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
+            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(#e5e5e5_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
           />
           <div className="mx-auto max-w-3xl px-4 pt-16 pb-12 text-center sm:px-6 sm:pt-24">
-            <p className="inline-flex items-center gap-x-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-sm text-muted-foreground">
+            <p className="inline-flex items-center gap-x-2 rounded-full border bg-background px-3 py-1 text-sm text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Real-time collaborative whiteboard
             </p>
@@ -54,7 +54,7 @@ export default async function LandingPage() {
         <Features />
 
         <section className="px-4 pb-20 sm:px-6 sm:pb-28">
-          <div className="mx-auto max-w-6xl rounded-2xl bg-blue-950 px-6 py-14 text-center text-white sm:py-20">
+          <div className="mx-auto max-w-6xl rounded-2xl bg-blue-950 dark:ring-1 dark:ring-blue-900 px-6 py-14 text-center text-white sm:py-20">
             <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
               Your next idea needs a canvas
             </h2>

@@ -1,8 +1,9 @@
 "use client";
 
+import { useRef } from "react";
 import { toast } from "sonner";
 import { usePathname, useRouter } from "next/navigation";
-import { Link2, Pencil, Trash2, Users } from "lucide-react";
+import { Eye, Link2, Pencil, Trash2, Users } from "lucide-react";
 import { DropdownMenuContentProps } from "@radix-ui/react-dropdown-menu";
 
 import { ConfirmModal } from "@/components/confirm-modal";
@@ -13,11 +14,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { api } from "../convex/_generated/api";
-import { useApiMutation } from "../hooks/use-api-mutation";
 import { Button } from "./ui/button";
-import { useRenameModal } from "@/store/use-rename-modal";
+import { useRename } from "@/store/use-rename";
+import { useRemoveBoard } from "@/hooks/use-board-mutations";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useShareModal } from "@/store/use-share-modal";
+import { useShareLinkModal } from "@/store/use-share-link-modal";
 import { isPersonalWorkspaceId } from "@/convex/workspace";
 
 interface ActionsProps {
@@ -38,9 +40,12 @@ export const Actions = ({
   title,
   orgId,
 }: ActionsProps) => {
-  const { onOpen } = useRenameModal();
+  const startRename = useRename((state) => state.start);
   const shareModal = useShareModal();
-  const { mutate, pending } = useApiMutation(api.board.remove);
+  const shareLinkModal = useShareLinkModal();
+  const remove = useRemoveBoard();
+  // Rename starts once the menu has closed (it would take the focus back).
+  const renaming = useRef(false);
   const onCopyLink = () => {
     navigator.clipboard
       .writeText(`${window.location.origin}/board/${id}`)
@@ -57,7 +62,7 @@ export const Actions = ({
       router.push("/dashboard");
     }
 
-    mutate({ id })
+    remove({ id: id as Id<"boards"> })
       .then(() => toast.success("Board deleted"))
       .catch(() => toast.error("Failed to delete board"));
   };
@@ -66,6 +71,12 @@ export const Actions = ({
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent
         onClick={(e) => e.stopPropagation()}
+        onCloseAutoFocus={(e) => {
+          if (!renaming.current) return;
+          renaming.current = false;
+          e.preventDefault();
+          startRename(id);
+        }}
         side={side}
         sideOffset={sideOffset}
         className="w-60"
@@ -73,6 +84,13 @@ export const Actions = ({
         <DropdownMenuItem onClick={onCopyLink} className="p-3 cursor-pointer">
           <Link2 className="h-4 w-4 mr-2" />
           Copy board link
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => shareLinkModal.onOpen(id)}
+          className="p-3 cursor-pointer"
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          Read-only link
         </DropdownMenuItem>
         {isPersonalWorkspaceId(orgId) && (
           <DropdownMenuItem
@@ -84,7 +102,9 @@ export const Actions = ({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
-          onClick={() => onOpen(id, title)}
+          onClick={() => {
+            renaming.current = true;
+          }}
           className="p-3 cursor-pointer"
         >
           <Pencil className="h-4 w-4 mr-2" />
@@ -93,7 +113,6 @@ export const Actions = ({
         <ConfirmModal
           header="Delete board?"
           description="This will delete the board and all of its contents."
-          disabled={pending}
           onConfirm={onDelete}
         >
           <Button

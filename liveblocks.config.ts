@@ -1,6 +1,6 @@
 import type { LiveList, LiveMap, LiveObject } from "@liveblocks/client";
 
-import { Layer, Color } from "@/types/canvas";
+import { Layer, Color, View } from "@/types/canvas";
 
 // Liveblocks v2+ types the whole app through this global interface instead of
 // generics passed to createRoomContext.
@@ -13,6 +13,10 @@ declare global {
       selection: string[];
       pencilDraft: [x: number, y: number, pressure: number][] | null;
       penColor: Color | null;
+      /** What this user is looking at, so others can follow them. */
+      view: View | null;
+      /** Laser pointer trail, oldest point first. */
+      laser: [x: number, y: number][] | null;
     };
 
     // Storage represents the shared document that persists in the Room, even
@@ -20,6 +24,8 @@ declare global {
     Storage: {
       layers: LiveMap<string, LiveObject<Layer>>;
       layerIds: LiveList<string>;
+      /** Canvas color, "#rrggbb"; none is white. */
+      background?: string;
     };
 
     // Static/readonly metadata on each user, as provided by

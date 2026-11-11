@@ -10,17 +10,19 @@ import {
 
 import { SearchInput } from "./search-input";
 import { InviteButton } from "./invite-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Navbar = () => {
   const { organization } = useOrganization();
 
   return (
-    <div className="flex items-center gap-x-4 p-5">
+    <header className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:p-5">
       {/* Below lg the sidebar with the logo is hidden. */}
       <Link href="/" aria-label="Board home page" className="lg:hidden shrink-0">
         <Image src="/logo.svg" alt="" height={36} width={36} />
       </Link>
-      <div className="hidden lg:flex lg:flex-1">
+      {/* Its own row below lg, after the org switcher and account. */}
+      <div className="order-last basis-full lg:order-none lg:basis-auto lg:flex-1">
         <SearchInput />
       </div>
       <div className="block lg:hidden flex-1 min-w-0">
@@ -38,16 +40,17 @@ export const Navbar = () => {
                 padding: "6px",
                 width: "100%",
                 borderRadius: "8px",
-                border: "1px solid #E5E7EB",
+                border: "1px solid hsl(var(--border))",
                 justifyContent: "space-between",
-                backgroundColor: "white",
+                backgroundColor: "hsl(var(--background))",
               },
             },
           }}
         />
       </div>
       {organization && <InviteButton />}
+      <ThemeToggle />
       <UserButton />
-    </div>
+    </header>
   );
 };

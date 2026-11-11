@@ -17,7 +17,12 @@ interface roomProps {
 
 export const Room = ({ children, roomId, fallback }: roomProps) => {
   return (
-    <LiveblocksProvider authEndpoint="/api/liveblocks-auth" throttle={16}>
+    <LiveblocksProvider
+      authEndpoint="/api/liveblocks-auth"
+      throttle={16}
+      // Bottom-left holds the zoom and undo controls.
+      badgeLocation="bottom-right"
+    >
       <RoomProvider
         id={roomId}
         initialPresence={{
@@ -25,6 +30,8 @@ export const Room = ({ children, roomId, fallback }: roomProps) => {
           selection: [],
           pencilDraft: null,
           penColor: null,
+          view: null,
+          laser: null,
         }}
         initialStorage={{
           layers: new LiveMap(),

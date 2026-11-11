@@ -121,7 +121,8 @@ const Avatar = ({
 
 export const CanvasDemo = () => {
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-2xl shadow-blue-950/10 ring-1 ring-black/5">
+    // Dark theme: inverted like a real board in its dark theme (globals.css).
+    <div className="overflow-hidden rounded-2xl border bg-white shadow-2xl shadow-blue-950/10 ring-1 ring-black/5 dark:shadow-black/40 dark:[filter:invert(93%)_hue-rotate(180deg)]">
       <svg
         viewBox="0 0 1000 600"
         className="block h-auto w-full select-none"

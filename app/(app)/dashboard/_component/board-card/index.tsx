@@ -7,79 +7,99 @@ import { useAuth } from "@clerk/nextjs";
 import { MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
-import { api } from "@/convex/_generated/api";
+import { cn } from "@/lib/utils";
 import { Actions } from "@/components/actions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useApiMutation } from "@/hooks/use-api-mutation";
+import {
+  OPTIMISTIC_ID_PREFIX,
+  useFavoriteBoard,
+  useUnfavoriteBoard,
+  type BoardListItem,
+} from "@/hooks/use-board-mutations";
 
 import { Footer } from "./footer";
 import { Overlay } from "./overlay";
 
 interface BoardCardProps {
-  id: string;
-  title: string;
-  authorName: string;
-  authorId: string;
-  createdAt: number;
-  imageUrl: string;
-  orgId: string;
-  isFavorite: boolean;
+  board: BoardListItem;
 }
 
-export const BoardCard = ({
-  id,
-  title,
-  authorId,
-  authorName,
-  createdAt,
-  imageUrl,
-  orgId,
-  isFavorite,
-}: BoardCardProps) => {
+export const BoardCard = ({ board }: BoardCardProps) => {
   const { userId } = useAuth();
+  const favorite = useFavoriteBoard();
+  const unfavorite = useUnfavoriteBoard();
+  const id = board._id;
+  // Just created: shown at once, but there's no board to open yet.
+  const isPending = id.startsWith(OPTIMISTIC_ID_PREFIX);
 
-  const authorLabel = userId === authorId ? "You" : authorName;
-  const createdAtLabel = formatDistanceToNow(createdAt, {
-    addSuffix: true,
-  });
-
-  const { mutate: onFavorite, pending: pendingFavorite } = useApiMutation(
-    api.board.favorite
-  );
-  const { mutate: onUnfavorite, pending: pendingUnfavorite } = useApiMutation(
-    api.board.unfavorite
-  );
+  const person = (personId: string | undefined, name: string | undefined) =>
+    personId === userId ? "You" : (name ?? "Someone");
+  const metaLabel = board.lastEditedAt
+    ? `Edited by ${person(board.lastEditorId, board.lastEditorName)}, ${formatDistanceToNow(board.lastEditedAt, { addSuffix: true })}`
+    : `Created by ${person(board.authorId, board.authorName)}, ${formatDistanceToNow(board._creationTime, { addSuffix: true })}`;
 
   const toggleFavorite = () => {
-    if (isFavorite) {
-      onUnfavorite({ id }).catch(() => toast.error("Failed to unfavorite"));
+    if (board.isFavorite) {
+      unfavorite({ id }).catch(() => toast.error("Failed to unfavorite"));
     } else {
-      onFavorite({ id }).catch(() => toast.error("Failed to favorite"));
+      favorite({ id }).catch(() => toast.error("Failed to favorite"));
     }
   };
 
   return (
-    <Link href={`/board/${id}`}>
-      <div className="group aspect-100/127 border rounded-lg flex flex-col justify-between overflow-hidden">
-        <div className="relative flex-1 bg-amber-50">
-          <Image src={imageUrl} alt={title} fill className="object-cover" />
-          <Overlay />
-          <Actions id={id} title={title} orgId={orgId} side="right">
-            <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity px-3 py-2 outline-hidden">
-              <MoreHorizontal className="text-white opacity-75 hover:opacity-100 transition-opacity" />
-            </button>
-          </Actions>
-        </div>
-        <Footer
-          isFavorite={isFavorite}
-          title={title}
-          authorLabel={authorLabel}
-          createdAtLabel={createdAtLabel}
-          onClick={toggleFavorite}
-          disabled={pendingFavorite || pendingUnfavorite}
+    <div
+      className={cn(
+        "group relative aspect-100/127 rounded-lg border bg-card flex flex-col overflow-hidden",
+        "has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-indigo-500 has-[a:focus-visible]:ring-offset-2 ring-offset-background",
+        isPending && "opacity-60 pointer-events-none"
+      )}
+      aria-busy={isPending || undefined}
+    >
+      {/*
+        The whole card opens the board (first in tab order); the buttons sit
+        above this link, not inside it, where keyboards and screen readers
+        couldn't use them.
+      */}
+      {!isPending && (
+        <Link
+          href={`/board/${id}`}
+          aria-label={board.title}
+          className="absolute inset-0 z-[1] rounded-lg outline-none"
         />
+      )}
+      <div className="relative flex-1 bg-amber-50">
+        {board.thumbnailUrl ? (
+          <Image
+            src={board.thumbnailUrl}
+            alt=""
+            fill
+            unoptimized
+            className="object-cover bg-white"
+          />
+        ) : (
+          board.imageUrl && (
+            <Image src={board.imageUrl} alt="" fill className="object-cover" />
+          )
+        )}
+        <Overlay />
       </div>
-    </Link>
+      <Footer
+        id={id}
+        title={board.title}
+        metaLabel={metaLabel}
+        isFavorite={board.isFavorite}
+        onToggleFavorite={toggleFavorite}
+      />
+      <Actions id={id} title={board.title} orgId={board.orgId} side="right">
+        <button
+          type="button"
+          aria-label={`Actions for ${board.title}`}
+          className="absolute top-1.5 right-1.5 z-10 rounded-md bg-black/25 px-2 py-1 outline-none hover:bg-black/40 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal className="text-white drop-shadow opacity-90 hover:opacity-100" />
+        </button>
+      </Actions>
+    </div>
   );
 };
 

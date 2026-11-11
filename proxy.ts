@@ -7,6 +7,8 @@ const isPublicRoute = createRouteMatcher([
   "/",
   // Guest mode (Phase 3).
   "/try(.*)",
+  // Read-only share links: the secret in the URL is the permission.
+  "/view(.*)",
   // In case sign-in/sign-up pages are added to the app later; today they are
   // hosted by Clerk.
   "/sign-in(.*)",

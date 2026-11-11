@@ -171,3 +171,24 @@ body,
     @apply bg-background text-foreground;
   }
 }
+
+/*
+  Dark theme of the board (menu > Theme), like Excalidraw's: the whole
+  page's colors are inverted with a half turn of hue, so white becomes
+  near-black but red stays red. Photos and avatars are turned back.
+*/
+html.board-dark {
+  filter: invert(93%) hue-rotate(180deg);
+  background: #ffffff;
+}
+
+html.board-dark img,
+html.board-dark image,
+html.board-dark video {
+  filter: invert(100%) hue-rotate(180deg);
+}
+
+/* Dialog backdrops stay dark in the dark theme. */
+html.board-dark .bg-black\/80 {
+  filter: invert(100%) hue-rotate(180deg);
+}

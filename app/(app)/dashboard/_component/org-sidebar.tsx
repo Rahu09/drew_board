@@ -21,7 +21,10 @@ export const OrgSidebar = () => {
   const { organization } = useOrganization();
 
   return (
-    <div className="hidden lg:flex flex-col space-y-6 w-[206px] pl-5 pt-5">
+    <nav
+      aria-label="Dashboard"
+      className="hidden lg:flex flex-col space-y-6 w-[206px] pl-5 pt-5"
+    >
       <Link href="/" aria-label="Board home page">
         <div className="flex items-center gap-x-2">
           <Image src="/logo.svg" alt="Logo" height={60} width={60} />
@@ -43,9 +46,9 @@ export const OrgSidebar = () => {
               padding: "6px",
               width: "100%",
               borderRadius: "8px",
-              border: "1px solid #E5E7EB",
+              border: "1px solid hsl(var(--border))",
               justifyContent: "space-between",
-              backgroundColor: "white",
+              backgroundColor: "hsl(var(--background))",
             },
           },
         }}
@@ -57,7 +60,7 @@ export const OrgSidebar = () => {
           size="lg"
           className="font-normal justify-start px-2 w-full"
         >
-          <Link href="/dashboard">
+          <Link href="/dashboard" aria-current={!favorites ? "page" : undefined}>
             <LayoutDashboard className="h-4 w-4 mr-2" />
             {organization ? "Team boards" : "Your boards"}
           </Link>
@@ -73,12 +76,13 @@ export const OrgSidebar = () => {
               pathname: "/dashboard",
               query: { favorites: true },
             }}
+            aria-current={favorites ? "page" : undefined}
           >
             <Star className="h-4 w-4 mr-2" />
             Favorite boards
           </Link>
         </Button>
       </div>
-    </div>
+    </nav>
   );
 };

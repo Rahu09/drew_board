@@ -9,6 +9,7 @@ import {
   useCanUndo,
   useHistory,
   useMutation,
+  useOthers,
   useOthersMapped,
   useRoom,
   useSelf,
@@ -18,7 +19,7 @@ import {
 import { connectionIdToColor } from "@/lib/utils";
 import type { Layer } from "@/types/canvas";
 
-import { boundingBox, moveIdsToBack, moveIdsToFront } from "./bounds";
+import { boundingBox, moveIds, type LayerMove } from "./bounds";
 import { BoardStoreContext } from "./context";
 import {
   MAX_LAYERS,
@@ -54,6 +55,27 @@ const useSelectionBounds = () => {
     shallow
   );
 };
+
+const useSelectedLayers = () => {
+  const selection = useSelection();
+
+  return useStorage(
+    (root) =>
+      selection
+        .map((id) => root.layers[id])
+        .filter((layer) => !!layer) as Layer[],
+    shallow
+  );
+};
+
+const useBackground = () => useStorage((root) => root.background ?? null);
+
+const useOtherView = (connectionId: number | null) =>
+  useOthers((others) => {
+    if (connectionId === null) return undefined;
+    const other = others.find((o) => o.connectionId === connectionId);
+    return other ? other.presence.view : undefined;
+  }, shallow);
 
 const useRemoteSelections = () => {
   const selections = useOthersMapped((other) => other.presence.selection);
@@ -158,12 +180,9 @@ const useLiveblocksActions = (): BoardActions => {
   );
 
   const reorder = useMutation(
-    ({ storage }, ids: readonly string[], toFront: boolean) => {
+    ({ storage }, ids: readonly string[], move: LayerMove) => {
       const liveLayerIds = storage.get("layerIds");
-      const current = liveLayerIds.toJSON();
-      const target = toFront
-        ? moveIdsToFront(current, ids)
-        : moveIdsToBack(current, ids);
+      const target = moveIds(liveLayerIds.toJSON(), ids, move);
 
       // Move each id into place, front to back of the target order.
       target.forEach((id, index) => {
@@ -177,6 +196,36 @@ const useLiveblocksActions = (): BoardActions => {
     []
   );
 
+  const setBackground = useMutation(({ storage }, color: string | null) => {
+    if (color) storage.set("background", color);
+    else storage.delete("background");
+  }, []);
+
+  const replaceContent = useMutation(
+    ({ storage, setMyPresence }, snapshot: BoardSnapshot) => {
+      const liveLayers = storage.get("layers");
+      const liveLayerIds = storage.get("layerIds");
+
+      setMyPresence({ selection: [] }, { addToHistory: true });
+      liveLayerIds.clear();
+      for (const id of [...liveLayers.keys()]) {
+        liveLayers.delete(id);
+      }
+
+      for (const id of snapshot.layerIds.slice(0, MAX_LAYERS)) {
+        const layer = snapshot.layers[id];
+        if (!layer) continue;
+
+        liveLayers.set(id, new LiveObject(layer));
+        liveLayerIds.push(id);
+      }
+
+      if (snapshot.background) storage.set("background", snapshot.background);
+      else storage.delete("background");
+    },
+    []
+  );
+
   return useMemo<BoardActions>(
     () => ({
       insertLayer,
@@ -184,8 +233,9 @@ const useLiveblocksActions = (): BoardActions => {
       translateLayers,
       setLayersFill,
       deleteLayers,
-      bringToFront: (ids) => reorder(ids, true),
-      sendToBack: (ids) => reorder(ids, false),
+      moveLayers: reorder,
+      setBackground,
+      replaceContent,
       setSelection: (ids, options) =>
         room.updatePresence(
           { selection: ids },
@@ -205,6 +255,8 @@ const useLiveblocksActions = (): BoardActions => {
           penColor ? { pencilDraft, penColor } : { pencilDraft }
         ),
       getPencilDraft: () => room.getPresence().pencilDraft,
+      setView: (view) => updateMyPresence({ view }),
+      setLaser: (laser) => updateMyPresence({ laser }),
       undo: history.undo,
       redo: history.redo,
       pauseHistory: history.pause,
@@ -220,6 +272,8 @@ const useLiveblocksActions = (): BoardActions => {
       setLayersFill,
       deleteLayers,
       reorder,
+      setBackground,
+      replaceContent,
     ]
   );
 };
@@ -239,7 +293,10 @@ export const LiveblocksBoardStoreProvider = ({
       useLayer,
       useSelection,
       useSelectionBounds,
+      useSelectedLayers,
       usePencilDraft,
+      useBackground,
+      useOtherView,
       useLayerCount,
       useCanUndo,
       useCanRedo,

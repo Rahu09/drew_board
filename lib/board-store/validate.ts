@@ -1,4 +1,9 @@
-import { LayerType, type Color, type Layer } from "@/types/canvas";
+import {
+  LayerType,
+  type Color,
+  type FillStyle,
+  type Layer,
+} from "@/types/canvas";
 
 import { MAX_LAYERS, type BoardSnapshot } from "./types";
 
@@ -9,6 +14,9 @@ import { MAX_LAYERS, type BoardSnapshot } from "./types";
 const MAX_POINTS = 5_000;
 const MAX_VALUE_LENGTH = 10_000;
 const MAX_ID_LENGTH = 64;
+const MAX_SRC_LENGTH = 2_048;
+const MIN_FONT_SIZE = 4;
+const MAX_FONT_SIZE = 400;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -54,6 +62,52 @@ const parsePoints = (value: unknown): number[][] | null => {
   return points;
 };
 
+const parseFillStyle = (value: unknown): { fillStyle?: FillStyle } =>
+  value === "solid" || value === "none" ? { fillStyle: value } : {};
+
+/** Keeps `value` under `key` only when it is one of `allowed`. */
+const oneOf = <K extends string, T>(
+  key: K,
+  value: unknown,
+  allowed: readonly T[]
+) =>
+  allowed.includes(value as T) ? ({ [key]: value as T } as { [P in K]?: T }) : {};
+
+const ROUGHNESS = [0, 1, 2] as const;
+const EDGES = ["sharp", "round"] as const;
+const FONT_FAMILIES = ["hand", "sans", "mono"] as const;
+const TEXT_ALIGNS = ["left", "center", "right"] as const;
+
+const parseOpacity = (value: unknown): { opacity?: number } =>
+  isFiniteNumber(value) && value >= 0 && value <= 100
+    ? { opacity: value }
+    : {};
+
+/** A color, or null for see-through; anything else is left out. */
+const parseBackground = (
+  value: unknown
+): { backgroundColor?: Color | null } => {
+  if (value === null) return { backgroundColor: null };
+  const color = parseColor(value);
+  return color ? { backgroundColor: color } : {};
+};
+
+const parseTextStyle = (value: Record<string, unknown>) => ({
+  ...oneOf("fontFamily", value.fontFamily, FONT_FAMILIES),
+  ...oneOf("textAlign", value.textAlign, TEXT_ALIGNS),
+});
+
+/** Only https images (uploads are Convex storage URLs); never data: or js. */
+const parseImageSrc = (value: unknown): string | null => {
+  if (typeof value !== "string" || value.length > MAX_SRC_LENGTH) return null;
+
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+};
+
 export const parseLayer = (value: unknown): Layer | null => {
   if (!isRecord(value)) return null;
 
@@ -75,6 +129,7 @@ export const parseLayer = (value: unknown): Layer | null => {
     width: width as number,
     height: height as number,
     fill,
+    ...parseOpacity(value.opacity),
   };
 
   const text =
@@ -82,15 +137,69 @@ export const parseLayer = (value: unknown): Layer | null => {
       ? { value: value.value }
       : {};
 
+  const fontSize =
+    isFiniteNumber(value.fontSize) &&
+    value.fontSize >= MIN_FONT_SIZE &&
+    value.fontSize <= MAX_FONT_SIZE
+      ? { fontSize: value.fontSize }
+      : {};
+
   switch (type) {
     case LayerType.Rectangle:
+      return {
+        type,
+        ...base,
+        ...parseFillStyle(value.fillStyle),
+        ...parseBackground(value.backgroundColor),
+        ...oneOf("roughness", value.roughness, ROUGHNESS),
+        ...oneOf("edges", value.edges, EDGES),
+        ...text,
+      };
     case LayerType.Ellipse:
+      return {
+        type,
+        ...base,
+        ...parseFillStyle(value.fillStyle),
+        ...parseBackground(value.backgroundColor),
+        ...oneOf("roughness", value.roughness, ROUGHNESS),
+        ...text,
+      };
+    case LayerType.Note: {
+      const textColor = parseColor(value.textColor);
+      return {
+        type,
+        ...base,
+        ...parseFillStyle(value.fillStyle),
+        ...(textColor ? { textColor } : {}),
+        ...oneOf("roughness", value.roughness, ROUGHNESS),
+        ...oneOf("edges", value.edges, EDGES),
+        ...parseTextStyle(value),
+        ...fontSize,
+        ...(isFiniteNumber(value.createdAt) && value.createdAt > 0
+          ? { createdAt: value.createdAt }
+          : {}),
+        ...text,
+      };
+    }
     case LayerType.Text:
-    case LayerType.Note:
-      return { type, ...base, ...text };
+      return {
+        type,
+        ...base,
+        ...parseTextStyle(value),
+        ...fontSize,
+        ...text,
+      };
     case LayerType.Path: {
       const points = parsePoints(value.points);
       return points ? { type, ...base, points } : null;
+    }
+    case LayerType.Arrow: {
+      const points = parsePoints(value.points);
+      return points?.length === 2 ? { type, ...base, points } : null;
+    }
+    case LayerType.Image: {
+      const src = parseImageSrc(value.src);
+      return src ? { type, ...base, src } : null;
     }
     default:
       return null;
@@ -136,5 +245,13 @@ export const parseSnapshot = (value: unknown): BoardSnapshot | null => {
     }
   }
 
-  return { layers, layerIds };
+  const background = parseCanvasColor(value.background);
+
+  return background ? { layers, layerIds, background } : { layers, layerIds };
 };
+
+/** A canvas color: "#rrggbb" only. */
+export const parseCanvasColor = (value: unknown): string | null =>
+  typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toLowerCase()
+    : null;

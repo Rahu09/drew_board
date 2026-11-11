@@ -39,6 +39,8 @@ interface PlainTextEditableProps {
   value: string | undefined;
   /** Shown when the layer has no text yet. */
   fallback: string;
+  /** Shows the text without letting anyone edit it. */
+  readOnly?: boolean;
   onChange: (value: string) => void;
   className?: string;
   style?: React.CSSProperties;
@@ -52,6 +54,7 @@ interface PlainTextEditableProps {
 export const PlainTextEditable = ({
   value,
   fallback,
+  readOnly = false,
   onChange,
   className,
   style,
@@ -80,7 +83,7 @@ export const PlainTextEditable = ({
   return (
     <div
       ref={ref}
-      contentEditable="plaintext-only"
+      contentEditable={readOnly ? false : "plaintext-only"}
       suppressContentEditableWarning
       spellCheck={false}
       onInput={(e) => {
@@ -89,7 +92,7 @@ export const PlainTextEditable = ({
         onChange(text);
       }}
       className={cn(
-        "h-full w-full flex flex-col justify-center text-center whitespace-pre-wrap break-words outline-hidden",
+        "h-full w-full flex flex-col justify-center-safe text-center whitespace-pre-wrap break-words outline-hidden",
         className
       )}
       style={style}

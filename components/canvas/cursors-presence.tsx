@@ -4,12 +4,12 @@ import { memo } from "react";
 import { shallow } from "@liveblocks/client";
 
 import { useOthersConnectionIds, useOthersMapped } from "@/liveblocks.config";
-// import { colorToCss } from "@/lib/utils";
+
+import { colorToCss, connectionIdToColor } from "@/lib/utils";
 
 import { Cursor } from "./cursor";
 import { Path } from "./path";
-import { colorToCss } from "@/lib/utils";
-// import { Path } from "./path";
+import { LaserPath } from "./laser";
 
 const Cursors = () => {
   const ids = useOthersConnectionIds();
@@ -53,10 +53,30 @@ const Drafts = () => {
   );
 };
 
+/** Other users' laser pointer trails. */
+const Lasers = () => {
+  const others = useOthersMapped((other) => other.presence.laser);
+
+  return (
+    <>
+      {others.map(([connectionId, laser]) =>
+        laser ? (
+          <LaserPath
+            key={connectionId}
+            trail={laser}
+            color={connectionIdToColor(connectionId)}
+          />
+        ) : null
+      )}
+    </>
+  );
+};
+
 export const CursorsPresence = memo(() => {
   return (
     <>
       <Drafts />
+      <Lasers />
       <Cursors />
     </>
   );

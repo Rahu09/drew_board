@@ -83,12 +83,88 @@ export const remove = mutation({
 
     await Promise.all(favorites.map((favorite) => ctx.db.delete(favorite._id)));
 
+    // Uploaded images, and comment threads with their replies.
+    const images = await ctx.db
+      .query("boardImages")
+      .withIndex("by_board", (q) => q.eq("boardId", board._id))
+      .collect();
+
+    await Promise.all(
+      images.map(async (image) => {
+        await ctx.storage.delete(image.storageId);
+        await ctx.db.delete(image._id);
+      })
+    );
+
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_board", (q) => q.eq("boardId", board._id))
+      .collect();
+
+    await Promise.all(comments.map((comment) => ctx.db.delete(comment._id)));
+
+    for (const resolved of [false, true]) {
+      const threads = await ctx.db
+        .query("commentThreads")
+        .withIndex("by_board_resolved", (q) =>
+          q.eq("boardId", board._id).eq("resolved", resolved)
+        )
+        .collect();
+
+      await Promise.all(threads.map((thread) => ctx.db.delete(thread._id)));
+    }
+
+    if (board.thumbnailId) {
+      await ctx.storage.delete(board.thumbnailId);
+    }
+
     await ctx.db.delete(board._id);
 
     // The Liveblocks room id is the board id (see components/room.tsx).
     await ctx.scheduler.runAfter(0, internal.liveblocks.deleteRoom, {
       roomId: board._id,
     });
+  },
+});
+
+// Share-link secrets are made in the browser (crypto.getRandomValues) and
+// only accepted in this shape: 32 or more URL-safe characters.
+const SHARE_TOKEN = /^[A-Za-z0-9_-]{32,64}$/;
+
+/**
+ * Turns the board's read-only link on (with a new secret) or off (null).
+ * Anyone who can use the board can do either.
+ */
+export const setShareLink = mutation({
+  args: { id: v.id("boards"), token: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const { board } = await requireBoard(ctx, args.id);
+
+    if (args.token !== null && !SHARE_TOKEN.test(args.token)) {
+      throw new ConvexError("INVALID_SHARE_TOKEN");
+    }
+
+    await ctx.db.patch(board._id, { shareToken: args.token ?? undefined });
+  },
+});
+
+/**
+ * The board behind a read-only link, for /view/<token>. Public: the secret
+ * token is the permission. Returns only what the viewer page needs.
+ */
+export const getShared = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    if (!SHARE_TOKEN.test(args.token)) {
+      return null;
+    }
+
+    const board = await ctx.db
+      .query("boards")
+      .withIndex("by_share_token", (q) => q.eq("shareToken", args.token))
+      .unique();
+
+    return board ? { _id: board._id, title: board.title } : null;
   },
 });
 

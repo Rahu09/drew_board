@@ -83,7 +83,7 @@ export const Features = () => {
         {features.map(({ icon: Icon, title, description, color }) => (
           <li
             key={title}
-            className="rounded-xl border border-neutral-200 bg-white p-6"
+            className="rounded-xl border bg-card p-6"
           >
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}

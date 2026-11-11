@@ -1,5 +1,6 @@
-import { colorToCss } from "@/lib/utils";
 import { EllipseLayer } from "@/types/canvas";
+
+import { Shape } from "./shape";
 
 interface EllipseProps {
   id: string;
@@ -8,29 +9,4 @@ interface EllipseProps {
   selectionColor?: string;
 }
 
-export const Ellipse = ({
-  id,
-  layer,
-  onPointerDown,
-  selectionColor,
-}: EllipseProps) => {
-  return (
-    <ellipse
-      className="drop-shadow-md"
-      onPointerDown={(e) => onPointerDown(e, id)}
-      style={{
-        transform: `translate(
-          ${layer.x}px,
-          ${layer.y}px
-        )`,
-      }}
-      cx={layer.width / 2}
-      cy={layer.height / 2}
-      rx={layer.width / 2}
-      ry={layer.height / 2}
-      fill={layer.fill ? colorToCss(layer.fill) : "#000"}
-      stroke={selectionColor || "transparent"}
-      strokeWidth="1"
-    />
-  );
-};
+export const Ellipse = (props: EllipseProps) => <Shape {...props} />;

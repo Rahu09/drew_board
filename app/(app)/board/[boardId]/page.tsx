@@ -6,13 +6,21 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Room } from "@/components/room";
 import { Canvas } from "@/components/canvas/canvas";
-import { Participants } from "@/components/canvas/participants";
 import { CursorsPresence } from "@/components/canvas/cursors-presence";
 import { LiveblocksBoardStoreProvider } from "@/lib/board-store/liveblocks-store";
 
-import { Info } from "./_components/info";
+import { BoardMenuItems, BoardTitle, Info } from "./_components/info";
+import { useShareDialog } from "@/store/use-share-dialog";
 import { Loading } from "./_components/loading";
+import { ThumbnailSync } from "./_components/thumbnail-sync";
 import { BoardOrgSwitch } from "./_components/board-org-switch";
+import {
+  BoardComments,
+  BoardCommentsList,
+} from "./_components/board-comments";
+import { useUploadBoardImage } from "@/hooks/use-upload-board-image";
+
+const openShare = () => useShareDialog.getState().setOpen(true);
 
 interface BoardIdPageProps {
   // Next.js 15+ passes route params as a Promise.
@@ -29,6 +37,7 @@ const BoarIdPage = ({ params }: BoardIdPageProps) => {
   // reactive, so it also kicks in if someone deletes the board while you are
   // on it.
   const board = useQuery(api.board.get, { id: boardId });
+  const uploadImage = useUploadBoardImage(boardId);
 
   if (board === undefined) {
     return <Loading />;
@@ -43,10 +52,20 @@ const BoarIdPage = ({ params }: BoardIdPageProps) => {
   return (
     <Room roomId={boardId} fallback={<Loading />}>
       <LiveblocksBoardStoreProvider>
+        <ThumbnailSync boardId={board._id} missing={!board.thumbnailId} />
         <Canvas
-          header={<Info boardId={boardId} />}
-          topRight={<Participants />}
+          home={{ href: "/dashboard", label: "Go to boards" }}
+          title={<BoardTitle boardId={boardId} />}
+          menuItems={<BoardMenuItems boardId={boardId} />}
+          onShare={openShare}
+          topRight={<Info boardId={boardId} />}
           overlay={<CursorsPresence />}
+          uploadImage={uploadImage}
+          comments={(slot) => <BoardComments boardId={boardId} {...slot} />}
+          commentsList={(slot) => (
+            <BoardCommentsList boardId={boardId} {...slot} />
+          )}
+          exportName={board.title}
         />
       </LiveblocksBoardStoreProvider>
     </Room>

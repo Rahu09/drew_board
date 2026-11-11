@@ -1,38 +1,131 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { Menu } from "lucide-react";
+import { toast } from "sonner";
 import { useQuery } from "convex/react";
+import { Eye, Link2, Pencil, Trash2, Users } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Poppins } from "next/font/google";
 
-import { cn } from "@/lib/utils";
 import { Hint } from "@/components/hints";
-import { api } from "@/convex/_generated/api";
-import { Actions } from "@/components/actions";
 import { Button } from "@/components/ui/button";
-import { useRenameModal } from "@/store/use-rename-modal";
+import { ConfirmModal } from "@/components/confirm-modal";
+import { api } from "@/convex/_generated/api";
+import { useRename } from "@/store/use-rename";
+import { useRemoveBoard } from "@/hooks/use-board-mutations";
+import { InlineTitleInput } from "@/components/inline-title";
 import { useShareModal } from "@/store/use-share-modal";
+import { useShareLinkModal } from "@/store/use-share-link-modal";
 import { isPersonalWorkspaceId } from "@/convex/workspace";
+import { Participants } from "@/components/canvas/participants";
+import { MenuRow, runAfterMenuClose } from "@/components/canvas/main-menu";
+
+import { ShareDialog } from "./share-dialog";
 
 interface InfoProps {
   boardId: string;
 }
 
-const font = Poppins({
-  subsets: ["latin"],
-  weight: ["600"],
-});
+/** Top left, after the menu button: the board's name (click to rename). */
+export const BoardTitle = ({ boardId }: InfoProps) => {
+  const isEditing = useRename((state) => state.editingId === boardId);
+  const startRename = useRename((state) => state.start);
+  const data = useQuery(api.board.get, { id: boardId });
 
-const TabSeparator = () => {
-  return <div className="text-neutral-300 px-1.5">|</div>;
+  if (!data) {
+    return <div className="mx-2 h-4 w-24 rounded bg-neutral-100" />;
+  }
+
+  if (isEditing) {
+    return (
+      <InlineTitleInput
+        id={data._id}
+        title={data.title}
+        className="mx-1 h-8 w-[40vw] sm:w-60 text-sm"
+      />
+    );
+  }
+
+  return (
+    <Hint label="Rename" side="bottom" sideOffset={10}>
+      <button
+        type="button"
+        onClick={() => startRename(data._id)}
+        className="h-9 min-w-0 max-w-[40vw] sm:max-w-60 truncate rounded-lg px-2 text-sm hover:bg-neutral-100"
+      >
+        {data.title}
+      </button>
+    </Hint>
+  );
 };
 
-export const Info = ({ boardId }: InfoProps) => {
-  const { onOpen } = useRenameModal();
+/** The board's own items in the menu: links, rename, delete. */
+export const BoardMenuItems = ({ boardId }: InfoProps) => {
+  const data = useQuery(api.board.get, { id: boardId });
+  const startRename = useRename((state) => state.start);
+  const shareModal = useShareModal();
+  const shareLinkModal = useShareLinkModal();
+  const removeBoard = useRemoveBoard();
+  const router = useRouter();
 
+  if (!data) return null;
+
+  const copyLink = () => {
+    navigator.clipboard
+      .writeText(`${window.location.origin}/board/${data._id}`)
+      .then(() => toast.success("Link copied"))
+      .catch(() => toast.error("Failed to copy link"));
+  };
+
+  const remove = () => {
+    // Leave first, so the page doesn't flash "Board not found".
+    router.push("/dashboard");
+    removeBoard({ id: data._id })
+      .then(() => toast.success("Board deleted"))
+      .catch(() => toast.error("Failed to delete board"));
+  };
+
+  return (
+    <>
+      <MenuRow icon={Link2} label="Copy board link" onSelect={copyLink} />
+      <MenuRow
+        icon={Eye}
+        label="Read-only link"
+        onSelect={() => shareLinkModal.onOpen(data._id)}
+      />
+      {isPersonalWorkspaceId(data.orgId) && (
+        <MenuRow
+          icon={Users}
+          label="Share with a team"
+          onSelect={() => shareModal.onOpen(data._id, data.title)}
+        />
+      )}
+      <MenuRow
+        icon={Pencil}
+        label="Rename"
+        onSelect={() => runAfterMenuClose(() => startRename(data._id))}
+      />
+      <ConfirmModal
+        header="Delete board?"
+        description="This will delete the board and all of its contents."
+        onConfirm={remove}
+      >
+        <Button
+          variant="ghost"
+          className="h-9 w-full justify-start gap-x-3 px-2.5 font-normal text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+          Delete board
+        </Button>
+      </ConfirmModal>
+    </>
+  );
+};
+
+/**
+ * Top right of a live board: who else is here, and Share. (The canvas adds
+ * the sidebar button after it.)
+ */
+export const Info = ({ boardId }: InfoProps) => {
   const data = useQuery(api.board.get, {
     id: boardId,
   });
@@ -42,49 +135,10 @@ export const Info = ({ boardId }: InfoProps) => {
   if (!data) return <InfoSkeleton />;
 
   return (
-    <div className="absolute top-2 left-2 bg-white rounded-md px-1.5 h-12 flex items-center shadow-md">
-      <Hint label="Go to boards" side="bottom" sideOffset={10}>
-        <Button asChild variant="board" className="px-2">
-          <Link href="/dashboard">
-            <Image src="/logo.svg" alt="Board Logo" height={40} width={40} />
-            <span
-              className={cn(
-                "font-semibold text-xl ml-2 text-black",
-                font.className
-              )}
-            >
-              Board
-            </span>
-          </Link>
-        </Button>
-      </Hint>
-      <TabSeparator />
-      <Hint label="Edit title" side="bottom" sideOffset={10}>
-        <Button
-          variant="board"
-          className="text-base font-normal px-2"
-          onClick={() => onOpen(data._id, data.title)}
-        >
-          {data.title}
-        </Button>
-      </Hint>
-      <TabSeparator />
-      <Actions
-        id={data._id}
-        title={data.title}
-        orgId={data.orgId}
-        side="bottom"
-        sideOffset={10}
-      >
-        <div>
-          <Hint label="Main menu" side="bottom" sideOffset={10}>
-            <Button size="icon" variant="board">
-              <Menu />
-            </Button>
-          </Hint>
-        </div>
-      </Actions>
-    </div>
+    <>
+      <Participants />
+      <ShareDialog board={data} />
+    </>
   );
 };
 
@@ -112,7 +166,5 @@ const useShareOnLoad = (
 };
 
 export const InfoSkeleton = () => {
-  return (
-    <div className="absolute top-2 left-2 bg-white rounded-md px-1.5 h-12 flex items-center shadow-md w-[300px]" />
-  );
+  return <div className="h-9 w-[76px] rounded-lg bg-indigo-100" />;
 };

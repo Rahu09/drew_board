@@ -6,6 +6,8 @@ import { MousePointer2 } from "lucide-react";
 import { useOther } from "@/liveblocks.config";
 import { connectionIdToColor } from "@/lib/utils";
 
+import { useCameraScale } from "./camera-context";
+
 interface CursorProps {
   connectionId: number;
 }
@@ -14,6 +16,7 @@ export const Cursor = memo(({ connectionId }: CursorProps) => {
   const info = useOther(connectionId, (user) => user?.info);
   const cursor = useOther(connectionId, (user) => user.presence.cursor);
 
+  const scale = useCameraScale();
   const name = info?.name || "Teammate";
 
   if (!cursor) {
@@ -25,7 +28,9 @@ export const Cursor = memo(({ connectionId }: CursorProps) => {
   return (
     <foreignObject
       style={{
-        transform: `translateX(${x}px) translateY(${y}px)`,
+        // Same size on screen at any zoom.
+        transform: `translate(${x}px, ${y}px) scale(${1 / scale})`,
+        transformOrigin: "0 0",
       }}
       height={50}
       width={name.length * 10 + 24}

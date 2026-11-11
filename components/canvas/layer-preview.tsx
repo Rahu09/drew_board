@@ -3,13 +3,15 @@
 import { memo } from "react";
 
 import { colorToCss } from "@/lib/utils";
-import { LayerType } from "@/types/canvas";
+import { Layer, LayerType } from "@/types/canvas";
 import { useBoardStore } from "@/lib/board-store/context";
 import { Rectangle } from "./rectangle";
 import { Ellipse } from "./ellipse";
 import { Note } from "./note";
 import { Text } from "./text";
 import { Path } from "./path";
+import { Arrow } from "./arrow";
+import { ImageView } from "./image-layer";
 
 interface LayerPreviewProps {
   id: string;
@@ -17,6 +19,7 @@ interface LayerPreviewProps {
   selectionColor?: string;
 }
 
+/** One layer of the board, read from the store. */
 export const LayerPreview = memo(
   ({ id, onLayerPointerDown, selectionColor }: LayerPreviewProps) => {
     const layer = useBoardStore().useLayer(id);
@@ -25,6 +28,47 @@ export const LayerPreview = memo(
       return null;
     }
 
+    return (
+      <LayerView
+        id={id}
+        layer={layer}
+        onLayerPointerDown={onLayerPointerDown}
+        selectionColor={selectionColor}
+      />
+    );
+  }
+);
+
+LayerPreview.displayName = "LayerPreview";
+
+/**
+ * Draws a layer, see-through as its opacity says. The group's `data-layer`
+ * is how the eraser finds the layer under the pointer.
+ */
+export const LayerView = (props: LayerPreviewProps & { layer: Layer }) => {
+  const { opacity } = props.layer;
+
+  return (
+    <g
+      data-layer={props.id}
+      opacity={
+        opacity === undefined || opacity >= 100
+          ? undefined
+          : Math.max(opacity, 0) / 100
+      }
+    >
+      <LayerShape {...props} />
+    </g>
+  );
+};
+
+/** Draws a layer; also used for the shape being dragged out. */
+const LayerShape = ({
+  id,
+  layer,
+  onLayerPointerDown,
+  selectionColor,
+}: LayerPreviewProps & { layer: Layer }) => {
     switch (layer.type) {
       case LayerType.Path:
         return (
@@ -65,6 +109,24 @@ export const LayerPreview = memo(
             selectionColor={selectionColor}
           />
         );
+      case LayerType.Arrow:
+        return (
+          <Arrow
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
+      case LayerType.Image:
+        return (
+          <ImageView
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
       case LayerType.Rectangle:
         return (
           <Rectangle
@@ -78,7 +140,4 @@ export const LayerPreview = memo(
         console.warn("Unknown layer type");
         return null;
     }
-  }
-);
-
-LayerPreview.displayName = "LayerPreview";
+};

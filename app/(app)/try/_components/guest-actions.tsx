@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Save, Share2 } from "lucide-react";
+import { Save } from "lucide-react";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -52,35 +52,35 @@ export const GuestActions = () => {
     );
 
   return (
-    <div className="absolute top-2 right-2 h-12 bg-white rounded-md px-1.5 flex items-center gap-x-1 shadow-md">
-      {gated(
-        "share",
-        <Button
-          variant="board"
-          disabled={!isLoaded || pending}
-          onClick={isSignedIn ? () => save("share") : undefined}
-          aria-label="Share"
-        >
-          <Share2 className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Share</span>
-        </Button>
-      )}
+    <>
       {gated(
         "save",
         <Button
+          variant="outline"
+          className="h-9 rounded-lg px-3 shadow-sm"
           disabled={!isLoaded || pending}
           onClick={isSignedIn ? () => save("save") : undefined}
           aria-label={saveLabel}
         >
-          <Save className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">{saveLabel}</span>
+          <Save className="h-4 w-4" />
+          <span className="hidden md:inline">{saveLabel}</span>
+        </Button>
+      )}
+      {gated(
+        "share",
+        <Button
+          className="h-9 rounded-lg bg-indigo-500 px-4 text-white hover:bg-indigo-600"
+          disabled={!isLoaded || pending}
+          onClick={isSignedIn ? () => save("share") : undefined}
+        >
+          Share
         </Button>
       )}
       {isSignedIn && (
-        <div className="pl-1 flex items-center">
+        <div className="flex items-center">
           <UserButton />
         </div>
       )}
-    </div>
+    </>
   );
 };

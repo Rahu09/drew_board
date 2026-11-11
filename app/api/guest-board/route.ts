@@ -25,9 +25,11 @@ const MAX_TITLE_LENGTH = 60;
 const toStorageDocument = ({
   layers,
   layerIds,
+  background,
 }: BoardSnapshot): PlainLsonObject => ({
   liveblocksType: "LiveObject",
   data: {
+    ...(background ? { background } : {}),
     layers: {
       liveblocksType: "LiveMap",
       data: Object.fromEntries(

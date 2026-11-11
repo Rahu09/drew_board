@@ -10,7 +10,7 @@ const GuestBoard = dynamic(
   {
     ssr: false,
     loading: () => (
-      <main className="h-full w-full bg-neutral-100 flex items-center justify-center">
+      <main className="h-full w-full bg-white flex items-center justify-center">
         <Loader className="h-6 w-6 text-muted-foreground animate-spin" />
       </main>
     ),

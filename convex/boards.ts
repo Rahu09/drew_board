@@ -1,8 +1,22 @@
 import { v } from "convex/values";
 import { getAll } from "convex-helpers/server/relationships";
 
-import { query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { query, type QueryCtx } from "./_generated/server";
 import { canAccessWorkspace, requireIdentity } from "./access";
+
+/** A board as the dashboard shows it. */
+const toCard = async (
+  ctx: QueryCtx,
+  board: Doc<"boards">,
+  isFavorite: boolean
+) => ({
+  ...board,
+  isFavorite,
+  thumbnailUrl: board.thumbnailId
+    ? await ctx.storage.getUrl(board.thumbnailId)
+    : null,
+});
 
 export const get = query({
   args: {
@@ -45,12 +59,11 @@ export const get = query({
           )
           .collect();
 
-        return matches
-          .filter((board) => favoriteIds.has(board._id))
-          .map((board) => ({
-            ...board,
-            isFavorite: true,
-          }));
+        return await Promise.all(
+          matches
+            .filter((board) => favoriteIds.has(board._id))
+            .map((board) => toCard(ctx, board, true))
+        );
       }
 
       const ids = favoritedBoards.map((b) => b.boardId);
@@ -59,12 +72,11 @@ export const get = query({
       // before board.remove started cleaning them up.
       const boards = await getAll(ctx.db, ids);
 
-      return boards
-        .filter((board) => board !== null)
-        .map((board) => ({
-          ...board,
-          isFavorite: true,
-        }));
+      return await Promise.all(
+        boards
+          .filter((board) => board !== null)
+          .map((board) => toCard(ctx, board, true))
+      );
     }
 
     const boards = title
@@ -89,10 +101,7 @@ export const get = query({
           )
           .unique();
 
-        return {
-          ...board,
-          isFavorite: !!favorite,
-        };
+        return await toCard(ctx, board, !!favorite);
       })
     );
   },

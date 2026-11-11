@@ -26,9 +26,10 @@ export function pointerEventToCanvasPoint(
   e: React.PointerEvent,
   camera: Camera
 ) {
+  // Two decimals: precise enough at any zoom, and compact in storage.
   return {
-    x: Math.round(e.clientX) - camera.x,
-    y: Math.round(e.clientY) - camera.y,
+    x: Math.round(((e.clientX - camera.x) / camera.scale) * 100) / 100,
+    y: Math.round(((e.clientY - camera.y) / camera.scale) * 100) / 100,
   };
 }
 
