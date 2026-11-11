@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { Toaster } from "@/components/ui/sonner";
 import { Loading } from "@/components/auth/loading";
 import { ModalProvider } from "@/providers/modal-provider";
 import { ConvexClientProvider } from "@/providers/convex-client-provider";
@@ -10,6 +11,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<Loading />}>
       <ConvexClientProvider>
+        <Toaster />
         <ModalProvider />
         {children}
       </ConvexClientProvider>

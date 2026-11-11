@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { siteConfig } from "@/lib/site";
-import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,7 +33,7 @@ export const viewport: Viewport = {
 };
 
 // Shared by every page, including the public landing page, so it holds no
-// auth or data providers. Those live in app/(app)/layout.tsx.
+// auth or data providers (or the toaster). Those live in app/(app)/layout.tsx.
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -43,7 +42,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Toaster />
         {children}
       </body>
     </html>
