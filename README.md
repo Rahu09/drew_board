@@ -48,11 +48,25 @@ Requires Node.js 24 and pnpm.
    pnpm dev
    ```
 
+## Routes
+
+- `/`: public landing page.
+- `/dashboard`: the board list of the active organization (sign-in required). Old links to `/?favorites=true` or `/?search=...` redirect here.
+- `/board/[boardId]`: a board (sign-in required). Opening a board of another organization you belong to switches to that organization.
+- `/try`: reserved for guest mode (public).
+
+`proxy.ts` decides which routes are public. Clerk and Convex providers live in `app/(app)/layout.tsx`, so the landing page ships none of their code.
+
 ## Scripts
 
 - `pnpm dev`: development server
 - `pnpm build`: production build
 - `pnpm lint`: ESLint
+- `npx tsc --noEmit` and `npx tsc -p convex/tsconfig.json --noEmit`: type checks for the app and for `convex/` (the root config does not cover `convex/`)
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push and pull request: install with `--frozen-lockfile`, both type checks, lint and a production build with placeholder environment variables.
 
 ## Deployment
 

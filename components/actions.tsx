@@ -48,7 +48,7 @@ export const Actions = ({
     // Deleting the board that is open: go back to the dashboard first, so the
     // page doesn't flash "Board not found" when the board disappears.
     if (pathname === `/board/${id}`) {
-      router.push("/");
+      router.push("/dashboard");
     }
 
     mutate({ id })

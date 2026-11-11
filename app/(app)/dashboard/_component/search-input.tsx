@@ -24,7 +24,7 @@ export const SearchInput = () => {
   // the URL.
   const updateSearchParam = useEffectEvent((search: string) => {
     // Nothing typed since the URL was last set: don't navigate. This also
-    // stops the first render from replacing ?favorites=true with "/".
+    // stops the first render from replacing ?favorites=true with the bare pathname.
     if (search === (searchParams.get("search") ?? "")) {
       return;
     }

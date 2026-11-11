@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A newer push to the same branch or PR cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type check, lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Reads the pnpm version (12.x) from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (app)
+        run: pnpm exec tsc --noEmit
+
+      # The root tsconfig does not cover convex/, which has its own config.
+      - name: Type check (Convex functions)
+        run: pnpm exec tsc -p convex/tsconfig.json --noEmit
+
+      - name: Lint
+        run: pnpm lint
+
+      # Placeholder values only: the build needs the variables to exist and be
+      # well formed, but never talks to these services. Real values live in
+      # Vercel and Convex.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_CONVEX_URL: https://placeholder-ci-123.convex.cloud
+          NEXT_PUBLIC_CONVEX_SITE_URL: https://placeholder-ci-123.convex.site
+          # "pk_test_" + base64("example.clerk.accounts.dev$")
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+          CLERK_SECRET_KEY: sk_test_ci_placeholder
+          LIVEBLOCKS_API_KEY: sk_dev_ci_placeholder

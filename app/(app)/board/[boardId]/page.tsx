@@ -8,7 +8,7 @@ import { Room } from "@/components/room";
 
 import { Canvas } from "./_components/canvas";
 import { Loading } from "./_components/loading";
-import { BoardNotFound } from "./_components/board-not-found";
+import { BoardOrgSwitch } from "./_components/board-org-switch";
 
 interface BoardIdPageProps {
   // Next.js 15+ passes route params as a Promise.
@@ -30,8 +30,10 @@ const BoarIdPage = ({ params }: BoardIdPageProps) => {
     return <Loading />;
   }
 
+  // Not visible in the active org: switch to the board's org if the user is
+  // a member of it, otherwise show "Board not found".
   if (board === null) {
-    return <BoardNotFound />;
+    return <BoardOrgSwitch boardId={boardId} />;
   }
 
   return (

@@ -9,12 +9,11 @@ export const BoardNotFound = () => {
       <Image src="/empty-search.svg" height={140} width={140} alt="" />
       <h2 className="text-2xl font-semibold mt-6">Board not found</h2>
       <p className="text-muted-foreground text-sm mt-2 max-w-sm">
-        It may have been deleted, or it belongs to an organization that
-        isn&apos;t your active one. Switch organization from your boards page
-        and try again.
+        It may have been deleted, or it belongs to an organization
+        you aren&apos;t a member of.
       </p>
       <Button asChild size="lg" className="mt-6">
-        <Link href="/">Back to boards</Link>
+        <Link href="/dashboard">Back to boards</Link>
       </Button>
     </main>
   );

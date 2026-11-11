@@ -164,3 +164,36 @@ export const get = query({
     return await getAccessibleBoard(ctx, identity, id);
   },
 });
+
+const MAX_ORG_IDS = 100;
+
+/**
+ * Which of the caller's orgs a board belongs to, so the board page can switch
+ * to that org when someone opens a link to a board of another org they are a
+ * member of.
+ *
+ * The client passes the orgs it is a member of (Convex only knows the active
+ * org from the token). The answer is the orgId only when it is one of those,
+ * otherwise null, so a board id alone never reveals which org owns the board
+ * or whether it exists. Membership itself is enforced by Clerk: the client
+ * can only switch to an org the user really belongs to.
+ */
+export const findOrg = query({
+  args: { id: v.string(), orgIds: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const id = ctx.db.normalizeId("boards", args.id);
+
+    if (!identity || !id || args.orgIds.length > MAX_ORG_IDS) {
+      return null;
+    }
+
+    const board = await ctx.db.get(id);
+
+    if (!board || !args.orgIds.includes(board.orgId)) {
+      return null;
+    }
+
+    return board.orgId;
+  },
+});
