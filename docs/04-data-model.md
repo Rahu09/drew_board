@@ -92,7 +92,7 @@ The "Powered by Liveblocks" badge (free plan) sits bottom-right (`badgeLocation`
 
 ## Layers (`types/canvas.ts`)
 
-`LayerType` enum is **stored in boards: only append, never reorder**: `Rectangle, Ellipse, Path, Text, Note, Arrow, Image`.
+`LayerType` enum is **stored in boards: only append, never reorder**: `Rectangle, Ellipse, Path, Text, Note, Arrow, Image, Diamond, Line, Frame, Embed, Table`.
 
 Common to all: `x, y, width, height, fill: Color {r,g,b}, value?, opacity? (0–100)`.
 
@@ -105,6 +105,11 @@ Common to all: `x, y, width, height, fill: Color {r,g,b}, value?, opacity? (0–
 | Note | `fillStyle?` (paper see-through), `textColor?`, `roughness?`, `edges?`, `fontSize?`, `fontFamily?`, `textAlign?`, `createdAt?` (date shown in the corner) |
 | Arrow | `points: [[x1,y1],[x2,y2]]` relative to x/y |
 | Image | `src` (https URL from Convex storage) |
+| Diamond | Like Rectangle: `fillStyle?`, `backgroundColor?`, `roughness?`, `edges?` |
+| Line | Like Arrow: `points`, `roughness?` (arrows have `roughness?` too) |
+| Frame | `value` = its name; `fill` = outline color |
+| Embed | `src?` (https embed address; empty until a link is pasted) |
+| Table | `cols`, `rows` (sizes), `cells` (`"row,col"` → `{ v, b, i, a, c, g, n }`), `header?`, `fontFamily?`, `fontSize?` (see [05-canvas.md](05-canvas.md#tables)) |
 
 **Rule: every style field is optional.** Boards saved before a field existed have none of it and must keep their old look (e.g. no `fillStyle` = solid; no `fontSize` = text scales with its box until first resized).
 

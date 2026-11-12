@@ -1,15 +1,16 @@
 import {
-  ArrowLayer,
   Color,
   InsertableLayerType,
   Layer,
   LayerType,
+  LinearLayer,
   Point,
 } from "@/types/canvas";
 import {
   NOTE_FONT_SIZE,
   TEXT_FONT_SIZE,
 } from "@/components/canvas/text-metrics";
+import { createTableLayer } from "@/components/canvas/table/model";
 
 /** Sticky-note yellow: notes drawn while the color is black get this. */
 export const NOTE_COLOR: Color = { r: 255, g: 249, b: 177 };
@@ -22,7 +23,15 @@ const DEFAULT_SIZE: Record<InsertableLayerType, { width: number; height: number 
     [LayerType.Note]: { width: 160, height: 160 },
     [LayerType.Text]: { width: 160, height: 60 },
     [LayerType.Arrow]: { width: 120, height: 0 },
+    [LayerType.Line]: { width: 120, height: 0 },
+    [LayerType.Diamond]: { width: 110, height: 110 },
+    [LayerType.Frame]: { width: 320, height: 240 },
+    [LayerType.Embed]: { width: 480, height: 300 },
+    [LayerType.Table]: { width: 500, height: 256 },
   };
+
+/** The color of a new frame's outline: quiet, so its contents stand out. */
+export const FRAME_COLOR: Color = { r: 134, g: 142, b: 150 };
 
 /** A drag shorter than this (screen pixels) counts as a click. */
 const CLICK_DISTANCE = 4;
@@ -33,17 +42,22 @@ export const isClickDrag = (origin: Point, current: Point, scale: number) =>
     scale <
   CLICK_DISTANCE;
 
-/** An arrow from `start` to `end` (canvas coordinates). */
+/**
+ * An arrow (or line) from `start` to `end` (canvas coordinates). New ones
+ * are hand-drawn at the middle sloppiness.
+ */
 export const arrowFromPoints = (
   start: Point,
   end: Point,
-  fill: Color
-): ArrowLayer => {
+  fill: Color,
+  type: LayerType.Arrow | LayerType.Line = LayerType.Arrow
+): LinearLayer => {
   const x = Math.min(start.x, end.x);
   const y = Math.min(start.y, end.y);
 
   return {
-    type: LayerType.Arrow,
+    type,
+    roughness: 1,
     x,
     y,
     width: Math.abs(end.x - start.x),
@@ -57,7 +71,7 @@ export const arrowFromPoints = (
 };
 
 /** The start and end of an arrow, in canvas coordinates. */
-export const arrowEndpoints = (layer: ArrowLayer): [Point, Point] => {
+export const arrowEndpoints = (layer: LinearLayer): [Point, Point] => {
   const [start = [0, 0], end = [layer.width, layer.height]] = layer.points;
 
   return [
@@ -96,14 +110,14 @@ export const createShapeLayer = (
   const dy = current.y - origin.y;
   const isClick = isClickDrag(origin, current, options.scale);
 
-  if (type === LayerType.Arrow) {
+  if (type === LayerType.Arrow || type === LayerType.Line) {
     const end = isClick
       ? { x: origin.x + DEFAULT_SIZE[type].width, y: origin.y }
       : options.constrain
         ? snapAngle(origin, current)
         : current;
 
-    return arrowFromPoints(origin, end, color);
+    return arrowFromPoints(origin, end, color, type);
   }
 
   let width = Math.abs(dx);
@@ -129,6 +143,8 @@ export const createShapeLayer = (
         // properties panel changes the paper.
         fill: NOTE_COLOR,
         fillStyle: "solid",
+        roughness: 1,
+        edges: "round",
         fontSize: NOTE_FONT_SIZE,
         createdAt: Date.now(),
       };
@@ -161,12 +177,33 @@ export const createShapeLayer = (
         backgroundColor: null,
         roughness: 1,
       };
+    case LayerType.Diamond:
+      return {
+        type,
+        ...box,
+        fill: color,
+        fillStyle: "none",
+        backgroundColor: null,
+        roughness: 1,
+        edges: "round",
+      };
+    case LayerType.Frame:
+      return { type, ...box, fill: FRAME_COLOR, value: "Frame" };
+    case LayerType.Embed:
+      return { type, ...box, fill: color };
+    case LayerType.Table:
+      return createTableLayer(box, color);
   }
 };
 
 /** SVG path data for an arrow: the line and a two-stroke head. */
-export const arrowPathData = (layer: ArrowLayer) => {
+export const arrowPathData = (layer: LinearLayer) => {
   const [start, end] = arrowEndpoints(layer);
+
+  if (layer.type === LayerType.Line) {
+    return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+  }
+
   const length = Math.hypot(end.x - start.x, end.y - start.y);
   const angle = Math.atan2(end.y - start.y, end.x - start.x);
   const head = Math.min(16, length / 2);

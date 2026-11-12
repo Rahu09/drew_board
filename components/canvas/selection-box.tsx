@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { useMediaQuery } from "usehooks-ts";
 
-import { LayerType, Side, XYWH } from "@/types/canvas";
+import { LayerType, Side, XYWH, isLinearLayer } from "@/types/canvas";
 import { useBoardStore } from "@/lib/board-store/context";
 
 import { arrowEndpoints } from "@/lib/canvas-geometry";
@@ -45,7 +45,8 @@ export const SelectionBox = memo(
     const isShowingHandles =
       !!soleLayer &&
       soleLayer.type !== LayerType.Path &&
-      soleLayer.type !== LayerType.Arrow;
+      soleLayer.type !== LayerType.Table &&
+      !isLinearLayer(soleLayer);
 
     const bounds = store.useSelectionBounds();
 
@@ -56,7 +57,7 @@ export const SelectionBox = memo(
     // Canvas units, so the handles keep their screen size at any zoom.
     const size = (isTouch ? HANDLE_SIZE.touch : HANDLE_SIZE.mouse) / scale;
 
-    if (soleLayer?.type === LayerType.Arrow) {
+    if (soleLayer && isLinearLayer(soleLayer)) {
       const id = selection[0];
 
       return (

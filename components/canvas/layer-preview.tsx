@@ -12,6 +12,10 @@ import { Text } from "./text";
 import { Path } from "./path";
 import { Arrow } from "./arrow";
 import { ImageView } from "./image-layer";
+import { Diamond } from "./diamond";
+import { Frame } from "./frame";
+import { Embed } from "./embed";
+import { Table } from "./table/table-layer";
 
 interface LayerPreviewProps {
   id: string;
@@ -109,6 +113,43 @@ const LayerShape = ({
             selectionColor={selectionColor}
           />
         );
+      case LayerType.Diamond:
+        return (
+          <Diamond
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
+      case LayerType.Frame:
+        return (
+          <Frame
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
+      case LayerType.Embed:
+        return (
+          <Embed
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
+      case LayerType.Table:
+        return (
+          <Table
+            id={id}
+            layer={layer}
+            onPointerDown={onLayerPointerDown}
+            selectionColor={selectionColor}
+          />
+        );
+      case LayerType.Line:
       case LayerType.Arrow:
         return (
           <Arrow

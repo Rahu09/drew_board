@@ -3,17 +3,24 @@ import Link from "next/link";
 import {
   ChevronDown,
   Circle,
+  Diamond,
   EllipsisVertical,
   Eraser,
+  Frame,
+  Globe,
   Hand,
   ImagePlus,
+  Lasso,
   MessageCircle,
+  Minus,
   MousePointer2,
   MoveUpRight,
+  PaintBucket,
   Pencil,
   Shapes,
   Square,
   StickyNote,
+  Table as TableIcon,
   Type,
   WandSparkles,
 } from "lucide-react";
@@ -59,8 +66,15 @@ export const IMAGE_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
 type ToolId =
   | "select"
   | "rectangle"
+  | "diamond"
   | "ellipse"
   | "arrow"
+  | "line"
+  | "table"
+  | "frame"
+  | "embed"
+  | "bucket"
+  | "lasso"
   | "pen"
   | "text"
   | "note"
@@ -115,8 +129,29 @@ const TOOLS: Record<ToolId, Tool> = {
       state.mode === CanvasMode.MovingEndpoint,
   },
   rectangle: shapeTool("rectangle", "Rectangle", "R", Square, LayerType.Rectangle),
+  diamond: shapeTool("diamond", "Diamond", "D", Diamond, LayerType.Diamond),
   ellipse: shapeTool("ellipse", "Ellipse", "O", Circle, LayerType.Ellipse),
   arrow: shapeTool("arrow", "Arrow", "A", MoveUpRight, LayerType.Arrow),
+  line: shapeTool("line", "Line", "L", Minus, LayerType.Line),
+  table: shapeTool("table", "Table (spreadsheet)", "G", TableIcon, LayerType.Table),
+  frame: shapeTool("frame", "Frame", "F", Frame, LayerType.Frame),
+  embed: shapeTool("embed", "Web embed", "", Globe, LayerType.Embed),
+  bucket: {
+    id: "bucket",
+    label: "Bucket fill",
+    shortcut: "B",
+    icon: PaintBucket,
+    state: { mode: CanvasMode.Bucket },
+    isActive: (state) => state.mode === CanvasMode.Bucket,
+  },
+  lasso: {
+    id: "lasso",
+    label: "Lasso selection",
+    shortcut: "",
+    icon: Lasso,
+    state: { mode: CanvasMode.Lasso, points: null },
+    isActive: (state) => state.mode === CanvasMode.Lasso,
+  },
   pen: {
     id: "pen",
     label: "Pen",
@@ -178,17 +213,39 @@ const LAYOUTS: Record<"wide" | "phone", { bar: ToolId[][]; more: ToolId[] }> =
   {
     wide: {
       bar: [
-        ["select", "rectangle", "ellipse", "arrow", "pen", "text", "note", "image"],
+        [
+          "select",
+          "rectangle",
+          "diamond",
+          "ellipse",
+          "arrow",
+          "line",
+          "pen",
+          "text",
+          "note",
+          "image",
+        ],
         ["comment"],
       ],
-      more: ["hand", "eraser", "laser"],
+      more: ["table", "frame", "embed", "bucket", "lasso", "hand", "eraser", "laser"],
     },
     // Like Excalidraw on phones: moving around and erasing come first.
     phone: {
       bar: [
         ["hand", "select", "pen", "eraser", "rectangle", "arrow", "text", "image", "note"],
       ],
-      more: ["ellipse", "comment", "laser"],
+      more: [
+        "ellipse",
+        "diamond",
+        "line",
+        "table",
+        "frame",
+        "embed",
+        "bucket",
+        "lasso",
+        "comment",
+        "laser",
+      ],
     },
   };
 
@@ -235,7 +292,7 @@ export const Toolbar = ({
     <ToolButton
       key={tool.id}
       label={tool.label}
-      shortcut={isPhone ? undefined : tool.shortcut}
+      shortcut={isPhone ? undefined : tool.shortcut || undefined}
       icon={tool.icon}
       onClick={() => pick(tool)}
       isActive={isActive}
@@ -324,7 +381,7 @@ export const Toolbar = ({
           align="end"
           side={isPhone ? "top" : "bottom"}
           sideOffset={10}
-          className="w-60 p-1.5"
+          className="w-60 max-h-[70vh] overflow-y-auto p-1.5"
         >
           {more.map((tool) => {
             const Icon = tool.icon;
@@ -339,9 +396,11 @@ export const Toolbar = ({
               >
                 <Icon className="h-4 w-4" strokeWidth={1.75} />
                 <span className="flex-1">{tool.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {shortcutLabel(tool.shortcut)}
-                </span>
+                {tool.shortcut && (
+                  <span className="text-xs text-muted-foreground">
+                    {shortcutLabel(tool.shortcut)}
+                  </span>
+                )}
               </DropdownMenuItem>
             );
           })}

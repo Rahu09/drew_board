@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useRef } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -16,7 +16,6 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { Hint } from "@/components/hints";
 import {
   Color,
   Edges,
@@ -37,24 +36,13 @@ import { FONT_SIZES } from "./text-metrics";
 import { layerFontFamily } from "./fonts";
 import { noteTextColor } from "./note";
 import { duplicateSelection } from "./use-canvas-shortcuts";
+import { Choice, ColorRow, Section, Swatch } from "./panel-controls";
+import { TableSections } from "./table/table-panel";
 
 // Colors offered first, like Excalidraw's: dark strokes, light insides.
 const STROKE_COLORS = ["#1e1e1e", "#e03131", "#2f9e44", "#1971c2", "#f08c00"];
 const BACKGROUND_COLORS = ["#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"];
 const NOTE_COLORS = ["#fff9b1", "#ffc9c9", "#b2f2bb", "#a5d8ff"];
-
-const COLOR_NAMES: Record<string, string> = {
-  "#1e1e1e": "Black",
-  "#e03131": "Red",
-  "#2f9e44": "Green",
-  "#1971c2": "Blue",
-  "#f08c00": "Orange",
-  "#ffc9c9": "Light red",
-  "#b2f2bb": "Light green",
-  "#a5d8ff": "Light blue",
-  "#ffec99": "Light yellow",
-  "#fff9b1": "Yellow",
-};
 
 const FONT_PRESETS = [
   { label: "S", name: "Small", size: 16 },
@@ -73,23 +61,37 @@ const hexToColor = (hex: string): Color => ({
 const toHex = (css: string) =>
   css === "black" ? "#000000" : css === "white" ? "#ffffff" : css;
 
-type ShapeLayer = Extract<Layer, { type: LayerType.Rectangle | LayerType.Ellipse }>;
+type ShapeLayer = Extract<
+  Layer,
+  { type: LayerType.Rectangle | LayerType.Ellipse | LayerType.Diamond }
+>;
 
 const isShape = (layer: Layer): layer is ShapeLayer =>
-  layer.type === LayerType.Rectangle || layer.type === LayerType.Ellipse;
+  layer.type === LayerType.Rectangle ||
+  layer.type === LayerType.Ellipse ||
+  layer.type === LayerType.Diamond;
+
+/** Arrows and lines: sloppiness applies to them too. */
+const isLinear = (layer: Layer) =>
+  layer.type === LayerType.Arrow || layer.type === LayerType.Line;
 
 /** Layers whose `fill` is the color of their lines or text. */
 const hasStroke = (layer: Layer) =>
   isShape(layer) ||
   layer.type === LayerType.Text ||
   layer.type === LayerType.Arrow ||
+  layer.type === LayerType.Line ||
+  layer.type === LayerType.Frame ||
+  layer.type === LayerType.Table ||
   layer.type === LayerType.Path;
 
 const hasBackground = (layer: Layer) =>
   isShape(layer) || layer.type === LayerType.Note;
 
 const hasEdges = (layer: Layer) =>
-  layer.type === LayerType.Rectangle || layer.type === LayerType.Note;
+  layer.type === LayerType.Rectangle ||
+  layer.type === LayerType.Diamond ||
+  layer.type === LayerType.Note;
 
 /** The inside's color of a shape or note, or null when see-through. */
 const backgroundOf = (layer: Layer): string | null => {
@@ -138,6 +140,7 @@ export const PropertiesPanel = memo(
     const store = useBoardStore();
     const { actions } = store;
     const layers = store.useSelectedLayers();
+    const selectionIds = store.useSelection();
 
     if (layers.length === 0 || isHidden) {
       return null;
@@ -150,8 +153,9 @@ export const PropertiesPanel = memo(
     const note = layers.find((layer) => layer.type === LayerType.Note);
     const backgroundLayer = layers.find(hasBackground);
     const roughLayer = layers.find(
-      (layer) => isShape(layer) || layer.type === LayerType.Note
+      (layer) => isShape(layer) || isLinear(layer) || layer.type === LayerType.Note
     );
+    const table = layers.length === 1 ? layers.find((layer) => layer.type === LayerType.Table) : undefined;
     const edgeLayer = layers.find(hasEdges);
     const textLayer = layers.find(hasFontSize);
     const opacity = layers[0].opacity ?? 100;
@@ -225,6 +229,10 @@ export const PropertiesPanel = memo(
           </Section>
         )}
 
+        {table && table.type === LayerType.Table && (
+          <TableSections id={selectionIds[0]} layer={table} actions={actions} />
+        )}
+
         {note && (
           <Section title="Text color">
             <ColorRow
@@ -278,7 +286,7 @@ export const PropertiesPanel = memo(
                 active={roughness === level}
                 onClick={() =>
                   apply((layer) =>
-                    isShape(layer) || layer.type === LayerType.Note
+                    isShape(layer) || isLinear(layer) || layer.type === LayerType.Note
                       ? { roughness: level }
                       : null
                   )
@@ -451,177 +459,6 @@ export const PropertiesPanel = memo(
 
 PropertiesPanel.displayName = "PropertiesPanel";
 
-const Section = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <div role="group" aria-label={title}>
-    <p className="mb-1.5 text-xs text-neutral-500">{title}</p>
-    <div className="flex flex-wrap items-center gap-1">{children}</div>
-  </div>
-);
-
-interface ChoiceProps {
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-
-const Choice = ({ label, active, disabled, onClick, children }: ChoiceProps) => (
-  <Hint label={label} side="bottom">
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "h-8 w-8 rounded-md flex items-center justify-center text-neutral-700 transition disabled:opacity-40",
-        active
-          ? "bg-indigo-100 text-indigo-900 ring-1 ring-indigo-400"
-          : "bg-neutral-100 hover:bg-neutral-200"
-      )}
-    >
-      {children}
-    </button>
-  </Hint>
-);
-
-interface SwatchProps {
-  /** CSS color, or null for see-through. */
-  color: string | null;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-const Swatch = ({ color, label, active, onClick }: SwatchProps) => (
-  <Hint label={label} side="bottom">
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "h-6 w-6 rounded-md p-0.5 transition",
-        active ? "ring-2 ring-indigo-500" : "hover:ring-1 hover:ring-neutral-300"
-      )}
-    >
-      <span
-        className="block h-full w-full rounded-[4px] border border-black/10"
-        style={
-          color
-            ? { background: color }
-            : {
-                // A checkerboard: nothing inside.
-                backgroundImage:
-                  "conic-gradient(#d4d4d4 25%, #fff 0 50%, #d4d4d4 0 75%, #fff 0)",
-                backgroundSize: "8px 8px",
-              }
-        }
-      />
-    </button>
-  </Hint>
-);
-
-interface ColorRowProps {
-  colors: readonly string[];
-  /** The current color ("#rrggbb"), or null. */
-  value: string | null;
-  onPick: (css: string) => void;
-  label: string;
-}
-
-/** Preset colors, then the current one, which opens a picker for any color. */
-const ColorRow = ({ colors, value, onPick, label }: ColorRowProps) => {
-  const current = value?.toLowerCase() ?? null;
-  const isPreset = current !== null && colors.includes(current);
-
-  return (
-    <>
-      {colors.map((color) => (
-        <Swatch
-          key={color}
-          color={color}
-          label={COLOR_NAMES[color] ?? color}
-          active={current === color}
-          onClick={() => onPick(color)}
-        />
-      ))}
-      <span className="mx-0.5 h-5 w-px bg-neutral-200" aria-hidden />
-      <CustomColor
-        value={current}
-        active={current !== null && !isPreset}
-        onPick={onPick}
-        label={`${label}: any color`}
-      />
-    </>
-  );
-};
-
-interface CustomColorProps {
-  value: string | null;
-  active: boolean;
-  onPick: (css: string) => void;
-  label: string;
-}
-
-/**
- * A swatch of the current color over a color input. The color is applied
- * when the picker closes (the input's change event), so picking is one
- * undo step, not one per move of the mouse.
- */
-const CustomColor = ({ value, active, onPick, label }: CustomColorProps) => {
-  const ref = useRef<HTMLInputElement>(null);
-  const pick = useRef(onPick);
-
-  useEffect(() => {
-    pick.current = onPick;
-  });
-
-  useEffect(() => {
-    const input = ref.current;
-    if (!input) return;
-
-    const onChange = () => pick.current(input.value);
-    input.addEventListener("change", onChange);
-    return () => input.removeEventListener("change", onChange);
-  }, []);
-
-  return (
-    <Hint label={label} side="bottom">
-      <label
-        className={cn(
-          "relative h-6 w-6 cursor-pointer rounded-md p-0.5 transition",
-          active ? "ring-2 ring-indigo-500" : "hover:ring-1 hover:ring-neutral-300"
-        )}
-      >
-        <span
-          className="block h-full w-full rounded-[4px] border border-black/10"
-          style={{
-            background:
-              value ??
-              "conic-gradient(#d4d4d4 25%, #fff 0 50%, #d4d4d4 0 75%, #fff 0) 0 0 / 8px 8px",
-          }}
-        />
-        <input
-          ref={ref}
-          key={value ?? "none"}
-          type="color"
-          defaultValue={value ?? "#000000"}
-          aria-label={label}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </label>
-    </Hint>
-  );
-};
-
 /** 0–100 in steps of 10. A drag is one undo step. */
 const OpacitySlider = ({
   value,
@@ -685,4 +522,46 @@ const EdgesIcon = ({ edges }: { edges: Edges }) => (
       <path d="M5 16 V10 Q5 5 10 5 H16" />
     )}
   </svg>
+);
+
+/**
+ * The colors the bucket tool pours: shown at the left while the tool is
+ * in use, in the place of the style panel.
+ */
+export const BucketPalette = ({
+  color,
+  onPick,
+  sheet,
+}: {
+  color: string | null;
+  onPick: (css: string | null) => void;
+  sheet?: boolean;
+}) => (
+  <div
+    className={
+      sheet
+        ? "fixed left-2 right-2 bottom-[112px] z-20 rounded-xl border border-neutral-200 bg-white p-3 shadow-lg select-none"
+        : "absolute left-2 top-[60px] z-10 w-[212px] rounded-lg border border-neutral-200 bg-white p-3 shadow-md select-none"
+    }
+    role="region"
+    aria-label="Bucket fill color"
+  >
+    <Section title="Fill with">
+      <Swatch
+        color={null}
+        label="Transparent (empty the shape)"
+        active={color === null}
+        onClick={() => onPick(null)}
+      />
+      <ColorRow
+        colors={[...BACKGROUND_COLORS, "#fff9b1", "#ffd8a8", "#eebefa", "#e9ecef"]}
+        value={color}
+        onPick={onPick}
+        label="Fill color"
+      />
+    </Section>
+    <p className="mt-2 text-xs text-neutral-500">
+      Click a shape, a sticky note or a table cell.
+    </p>
+  </div>
 );

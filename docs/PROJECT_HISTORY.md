@@ -2,7 +2,7 @@
 
 This file is the **hand-off context** between working sessions (human or AI). Read it before starting work, and add to it at the end of every session: what was asked, what was decided, what changed, problems and fixes, and what is still open.
 
-Last updated: 2026-11-12.
+Last updated: 2026-11-13.
 
 ---
 
@@ -32,7 +32,7 @@ Last updated: 2026-11-12.
 | Phase 5 | Dashboard UX: thumbnails, optimistic updates, inline rename, sorting, "Edited by", dark mode, accessibility, phone layout. Plus Excalidraw-style phone layout for the board | Done 2026-11-11 (`87e8188`) |
 | Mobile fixes | Touch fixes and the iPhone text/note fix | Done 2026-11-11/12 (`1395208`, `6b38c78`); **iPhone not yet confirmed by the owner** |
 | Phase 6 | Performance: React Compiler (measured, on), server-rendered layouts (no full-screen auth spinner), paginated board lists/search, batch favorites (not one query per board), faster selection net. Plus the iPhone Safari top-bar fix | Done 2026-11-12 (**not committed**; production needs the one-time `backfillBoardSortKeys` run after deploy) |
-| Phase 7 | Production: Clerk production instance (needs a domain; update `convex/auth.config.js`), Sentry, Vercel Analytics, Playwright e2e with `@clerk/testing` in CI | **Next, not started** |
+| Phase 7 | Production: Clerk production instance (needs a domain; update `convex/auth.config.js`), Sentry, Vercel Analytics, Playwright e2e with `@clerk/testing` in CI | **Planned and documented, not implemented** (owner decision 2026-11-13: keep as is for now). Plan, benefits, risks, cost and interview answers: [08-phase-7-production-plan.md](08-phase-7-production-plan.md) |
 
 ## 3. Key decisions (and why)
 
@@ -106,6 +106,15 @@ In order of the owner's requests:
 3. Tested in the built-in browser with 30 throwaway boards (all deleted): paging 24 → 32, all four sorts, search, favorites, optimistic favorite/unfavorite, org workspace; selection net and drawing/typing on `/try` (dev and both production builds); a throwaway live board. Checks: both `tsc`, lint, `pnpm build` (in scratch copies).
 4. **"Update the landing page"**: the page still showed the pre-redesign board (gray dotted canvas, toolbar on the left, filled shapes) and six early features. Redrew the animated demo to match today's canvas (see `06-dashboard.md`), rewrote the feature cards (nine, covering arrows, comments, images/export, personal boards, read-only links, guest mode, phone, dark mode, shortcuts), and updated the hero text and the site description (`lib/site.ts`). Checked light, dark and phone width; a production build confirms the landing page still sends no Clerk/Convex/Liveblocks/rough.js code.
 
+### Session 2026-11-12 (more tools, defaults, tables)
+
+Owner (with an Excalidraw screenshot of its tool menu): add the tools Excalidraw has that Board lacked, make round corners and middle sloppiness the default, and add a spreadsheet-like grid with as many features as possible.
+
+1. **New layers and tools**: diamond (D), line (L), frame (F), web embed, bucket fill (B), lasso selection, plus the table (G). Appended to `LayerType`; all new fields optional. Toolbar, "More tools" menu, shortcuts, help, command palette, validation, export, dark theme (iframes turned back) updated. Details in `05-canvas.md`.
+2. **Defaults**: new rectangles, diamonds, notes, arrows and lines are hand-drawn at sloppiness 1 with round corners; arrows and lines gained `roughness`.
+3. **Table**: see `05-canvas.md`. Formula engine tested directly with Node (`--experimental-transform-types`): 25 expressions, circular references, reference shifting. Browser-tested on `/try`: typing and Tab/Enter navigation, formulas, drag selection, currency and bold, insert row (formulas moved), paste of a 2×2 grid, sort, Ctrl+Z.
+4. Also tested: all new shape tools and their defaults, frame moving its contents, bucket fill, lasso, embed (YouTube link turned into an embed address and shown), export preview with a table, frame and embed.
+
 ## 5. Problems faced and how they were solved
 
 | Problem | Cause | Resolution |
@@ -137,6 +146,10 @@ In order of the owner's requests:
 | Paginated query can't say "token not ready" by returning `null` | `usePaginatedQuery` needs a page | `boards.access` query; the list is skipped until it is true |
 | Old boards would sort wrong after adding sort keys | Existing documents have no `activityAt` / `titleKey` | `migrations:backfillBoardSortKeys` (dev done; production is an owner step) |
 | Bash heredoc with an apostrophe failed again and half a command ran | Rule 10 | Scripts written with the Write tool, then run |
+| Click on a table cell deselected the table | The pointer release bubbled to the canvas, which treats a release with nothing dragged as a click on empty space | `trackPointer` in `table-layer.tsx` follows the pointer on the window and swallows the release |
+| Table cell text box stayed unfocused after the first cell click | It is only mounted once a cell is selected, after the click's `focus()` call | Effect that focuses it when `hasCells` turns true |
+| Typing did nothing in a cell (test harness and phone keyboards) | Text that arrives as an input event without a key press was ignored | `onChange` starts an edit when not editing |
+| YouTube embed showed "Error 153" | `referrerPolicy="no-referrer"`: YouTube requires an embedder | `strict-origin-when-cross-origin` (origin only, never the path) |
 | Dev server slow for a few seconds after turning on the compiler | Next restarts and recompiles after a `next.config.mjs` change | Wait; pages load normally afterwards |
 
 ## 6. Open items / to verify
@@ -151,7 +164,11 @@ In order of the owner's requests:
 - Read-only link that is turned off returns HTTP 200 "not found" instead of 404.
 - The "Powered by Liveblocks" badge (bottom-right) slightly covers the sidebar's bottom corner when the sidebar is open.
 - Exports use system fonts (Kalam/Inter/monospace only if installed).
-- Phase 7 (see roadmap).
+- **Web embed on Safari / iPhone** is a link card, not a live frame (WebKit draws frames inside the SVG wrongly). Not tested on a real iPhone; the card is the safe fallback.
+- **Tables on phones**: selecting cells, the keyboard primer (a second tap on the selected cell starts editing) and the corner move handle are untested on a real device.
+- Two people editing different cells of the same table at the same moment can overwrite each other (the table is one stored value). Per-cell storage would fix it if it matters.
+- Not built (said so to the owner): Excalidraw's "Draw to shape", AI features (text to diagram, wireframe to code), Mermaid import.
+- Phase 7 is documented but deliberately not built (see [08-phase-7-production-plan.md](08-phase-7-production-plan.md)).
 
 ## 7. How to add a session entry
 

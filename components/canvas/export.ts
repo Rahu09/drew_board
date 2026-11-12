@@ -16,7 +16,9 @@ import {
 } from "./text-metrics";
 import { EXPORT_FONTS, layerTextAlign } from "./fonts";
 import { noteTextColor } from "./note";
-import { cornerRadius, seedFromId, shapePaths } from "./rough-shape";
+import { cleanShapePath, cornerRadius, linearPaths, seedFromId, shapePaths } from "./rough-shape";
+import { hostOf } from "./embed-url";
+import { tableToSvg } from "./table/table-export";
 import { shapeSpec } from "./shape-style";
 
 // Exports rebuild the board as a standalone SVG from the layer data (the
@@ -142,7 +144,38 @@ const layerBody = async (id: string, layer: Layer): Promise<string> => {
   switch (layer.type) {
     case LayerType.Rectangle:
     case LayerType.Ellipse:
+    case LayerType.Diamond:
       return pathsToSvg(shapePaths(shapeSpec(id, layer)));
+    case LayerType.Frame: {
+      const outline = cleanShapePath({
+        kind: "rectangle",
+        x,
+        y,
+        width,
+        height,
+        roughness: 0,
+        edges: "round",
+        stroke: color,
+        strokeWidth: 2,
+        background: null,
+        seed: 1,
+      });
+      const name = escapeXml(layer.value || "Frame");
+      return (
+        `<path d="${outline}" fill="none" stroke="${color}" stroke-width="2"/>` +
+        `<text x="${x}" y="${y - 8}" font-family="${escapeXml(EXPORT_FONTS.sans)}" font-size="15" fill="${color}">${name}</text>`
+      );
+    }
+    case LayerType.Embed: {
+      // A page can't be drawn into an image: show where it points.
+      const label = layer.src ? hostOf(layer.src) : "Web embed";
+      return (
+        `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="2"/>` +
+        `<text x="${x + width / 2}" y="${y + height / 2}" text-anchor="middle" dominant-baseline="central" font-family="${escapeXml(EXPORT_FONTS.sans)}" font-size="16" fill="#495057">${escapeXml(label)}</text>`
+      );
+    }
+    case LayerType.Table:
+      return tableToSvg(layer);
     case LayerType.Path: {
       const d = getSvgPathFromStroke(
         getStroke(layer.points, {
@@ -155,7 +188,19 @@ const layerBody = async (id: string, layer: Layer): Promise<string> => {
       return `<path transform="translate(${x} ${y})" d="${d}" fill="${color}"/>`;
     }
     case LayerType.Arrow:
-      return `<path d="${arrowPathData(layer)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    case LayerType.Line:
+      return linearPaths(
+        arrowPathData(layer),
+        layer.roughness ?? 0,
+        color,
+        2,
+        seedFromId(id)
+      )
+        .map(
+          (path) =>
+            `<path d="${path.d}" fill="none" stroke="${path.stroke}" stroke-width="${path.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`
+        )
+        .join("");
     case LayerType.Note: {
       const isOutline = layer.fillStyle === "none";
       const roughness = layer.roughness ?? 0;

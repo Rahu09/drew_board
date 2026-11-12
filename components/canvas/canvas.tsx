@@ -7,7 +7,14 @@ import {
   ArrowUpToLine,
   Circle,
   Copy,
+  Diamond,
   Eraser,
+  Frame as FrameIcon,
+  Globe,
+  Lasso,
+  PaintBucket,
+  Table as TableIcon,
+  Minus,
   Expand,
   FolderOpen,
   Hand,
@@ -49,6 +56,7 @@ import {
   Point,
   Side,
   XYWH,
+  isLinearLayer,
 } from "@/types/canvas";
 import {
   colorToCss,
@@ -77,6 +85,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useDisableScrollBounce } from "@/hooks/use-disable-scroll-bounce";
+import { fillTargetAt } from "./bucket";
+import { layersInLasso, withFrameContents } from "./hit-test";
+import { TableInteractionContext } from "./table/interaction-context";
 
 import { Hint } from "@/components/hints";
 import { withShortcut } from "@/lib/shortcuts";
@@ -85,7 +96,7 @@ import { IMAGE_ACCEPT, Toolbar, type ToolbarHome } from "./toolbar";
 import { SIDEBAR_WIDTH, Sidebar, type SidebarTab } from "./sidebar";
 import { LayerPreview, LayerView } from "./layer-preview";
 import { SelectionBox } from "./selection-box";
-import { PropertiesPanel } from "./properties-panel";
+import { BucketPalette, PropertiesPanel } from "./properties-panel";
 import { PhoneActions, ZoomControls } from "./zoom-controls";
 import { PHONE_QUERY, useMediaQuery } from "@/hooks/use-media-query";
 import { Path } from "./path";
@@ -179,6 +190,7 @@ const isBusy = (mode: CanvasMode) =>
   mode === CanvasMode.SelectionNet ||
   mode === CanvasMode.Creating ||
   mode === CanvasMode.MovingEndpoint ||
+  mode === CanvasMode.Lasso ||
   mode === CanvasMode.Panning;
 
 const IMAGE_TYPES = IMAGE_ACCEPT.split(",");
@@ -249,12 +261,22 @@ const LASER_CURSOR = svgCursor(
   "crosshair"
 );
 
+const BUCKET_CURSOR = svgCursor(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg>',
+  4,
+  20,
+  "crosshair"
+);
+
 const cursorFor = (state: CanvasState, readOnly: boolean) => {
   switch (state.mode) {
     case CanvasMode.Inserting:
     case CanvasMode.Creating:
     case CanvasMode.Comment:
+    case CanvasMode.Lasso:
       return "crosshair";
+    case CanvasMode.Bucket:
+      return BUCKET_CURSOR;
     case CanvasMode.Panning:
       return "grabbing";
     case CanvasMode.Hand:
@@ -462,6 +484,8 @@ export const Canvas = ({
     g: 0,
     b: 0,
   });
+  // The color the bucket pours (null: empties the shape).
+  const [bucketColor, setBucketColor] = useState<string | null>("#ffec99");
   // Where a new comment thread is being started (Comment tool).
   const [commentDraft, setCommentDraft] = useState<Point | null>(null);
   // The sidebar's open tab, or null when it is closed.
@@ -506,6 +530,9 @@ export const Canvas = ({
   } | null>(null);
   // The tool to go back to after panning with the middle mouse button.
   const stateBeforePan = useRef<CanvasState>({ mode: CanvasMode.None });
+  // The layers a drag moves: the selection and what is inside its frames.
+  // Worked out once per drag (it copies the board), not on every move.
+  const translateIds = useRef<string[] | null>(null);
   // For work that finishes later (image uploads).
   const cameraRef = useRef(camera);
   // The eraser stroke while the pointer is down: its last position
@@ -1062,23 +1089,53 @@ export const Canvas = ({
       if (canvasState.mode !== CanvasMode.MovingEndpoint) return;
 
       const layer = actions.getSnapshot().layers[canvasState.id];
-      if (layer?.type !== LayerType.Arrow) return;
+      if (!layer || !isLinearLayer(layer)) return;
 
       const ends = arrowEndpoints(layer);
       ends[canvasState.end] = point;
       const { x, y, width, height, points } = arrowFromPoints(
         ends[0],
         ends[1],
-        layer.fill
+        layer.fill,
+        layer.type
       );
       actions.updateLayer(canvasState.id, { x, y, width, height, points });
     },
     [actions, canvasState]
   );
 
+  /** The bucket tool: pours the chosen color into the shape at `point`. */
+  const fillAt = useCallback(
+    (point: Point) => {
+      const target = fillTargetAt(actions.getSnapshot(), point, bucketColor);
+
+      if (target) actions.updateLayer(target.id, target.patch);
+      else toast.info("Click a shape, a sticky note or a table cell to fill it");
+    },
+    [actions, bucketColor]
+  );
+
+  /** The lasso tool: selects what the loop drawn around layers contains. */
+  const finishLasso = useCallback(
+    (loop: Point[]) => {
+      const ids = layersInLasso(actions.getSnapshot(), loop);
+
+      if (ids.length > 0) {
+        actions.setSelection(ids, { addToHistory: true });
+        // Like Excalidraw: on to the select tool, so the layers can be moved.
+        setCanvasState({ mode: CanvasMode.None });
+      } else {
+        unselectLayers();
+        setCanvasState({ mode: CanvasMode.Lasso, points: null });
+      }
+    },
+    [actions, unselectLayers]
+  );
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       const point = pointerEventToCanvasPoint(e, camera);
+      translateIds.current = null;
 
       // Middle button anywhere, the hand tool, or any drag on a read-only
       // board: pan.
@@ -1108,6 +1165,16 @@ export const Canvas = ({
         const ids = [...layersUnder(at, at)];
         eraser.current = { last: at, ids };
         setCanvasState({ mode: CanvasMode.Eraser, erasing: ids });
+        return;
+      }
+
+      if (canvasState.mode === CanvasMode.Bucket) {
+        fillAt(point);
+        return;
+      }
+
+      if (canvasState.mode === CanvasMode.Lasso) {
+        setCanvasState({ mode: CanvasMode.Lasso, points: [point] });
         return;
       }
 
@@ -1177,7 +1244,7 @@ export const Canvas = ({
 
       setCanvasState({ origin: point, mode: CanvasMode.Pressing });
     },
-    [actions, camera, canvasState, laser, readOnly, startDrawing]
+    [actions, camera, canvasState, fillAt, laser, readOnly, startDrawing]
   );
 
   const onPointerUp = useCallback(
@@ -1194,6 +1261,8 @@ export const Canvas = ({
         setCanvasState({ mode: CanvasMode.None });
       } else if (canvasState.mode === CanvasMode.Pencil) {
         insertPath();
+      } else if (canvasState.mode === CanvasMode.Lasso) {
+        if (canvasState.points) finishLasso(canvasState.points);
       } else if (canvasState.mode === CanvasMode.Creating) {
         if (
           e.pointerType === "touch" &&
@@ -1219,11 +1288,13 @@ export const Canvas = ({
         canvasState.mode !== CanvasMode.Inserting &&
         canvasState.mode !== CanvasMode.Comment &&
         canvasState.mode !== CanvasMode.Hand &&
-        canvasState.mode !== CanvasMode.Laser
+        canvasState.mode !== CanvasMode.Laser &&
+        canvasState.mode !== CanvasMode.Bucket
       ) {
         setCanvasState({ mode: CanvasMode.None });
       }
 
+      translateIds.current = null;
       actions.resumeHistory();
 
       // A tap (not a drag) on text or a note: edit it, caret where tapped.
@@ -1231,7 +1302,15 @@ export const Canvas = ({
         editLayerTextAt(finger.id, e.clientX, e.clientY);
       }
     },
-    [actions, camera, canvasState, finishCreating, unselectLayers, insertPath]
+    [
+      actions,
+      camera,
+      canvasState,
+      finishCreating,
+      finishLasso,
+      unselectLayers,
+      insertPath,
+    ]
   );
 
   const onLayerPointerDown = useCallback(
@@ -1245,11 +1324,14 @@ export const Canvas = ({
         canvasState.mode === CanvasMode.Comment ||
         canvasState.mode === CanvasMode.Hand ||
         canvasState.mode === CanvasMode.Eraser ||
-        canvasState.mode === CanvasMode.Laser
+        canvasState.mode === CanvasMode.Laser ||
+        canvasState.mode === CanvasMode.Bucket ||
+        canvasState.mode === CanvasMode.Lasso
       ) {
         return;
       }
 
+      translateIds.current = null;
       actions.pauseHistory();
       e.stopPropagation();
 
@@ -1308,6 +1390,13 @@ export const Canvas = ({
             setCanvasState({ mode: CanvasMode.Eraser, erasing: stroke.ids });
           }
         }
+      } else if (canvasState.mode === CanvasMode.Lasso) {
+        const loop = canvasState.points;
+        const last = loop?.at(-1);
+
+        if (loop && last && distanceBetween(last, current) * camera.scale >= 3) {
+          setCanvasState({ mode: CanvasMode.Lasso, points: [...loop, current] });
+        }
       } else if (canvasState.mode === CanvasMode.Creating) {
         setCanvasState({ ...canvasState, current, constrain: e.shiftKey });
       } else if (canvasState.mode === CanvasMode.MovingEndpoint) {
@@ -1324,8 +1413,13 @@ export const Canvas = ({
           if (distanceBetween(finger, at) < TAP_SLOP) return;
           finger.moved = true;
         }
+        // Frames take what is inside them along.
+        translateIds.current ??= withFrameContents(
+          actions.getSnapshot(),
+          actions.getSelection()
+        );
         actions.translateLayers(
-          actions.getSelection(),
+          translateIds.current,
           offsetBetween(lastPointOf(canvasState), current)
         );
         setCanvasState({ mode: CanvasMode.Translating, current });
@@ -1369,9 +1463,12 @@ export const Canvas = ({
           return { mode: CanvasMode.Inserting, layerType: state.layerType };
         case CanvasMode.Eraser:
           return { mode: CanvasMode.Eraser, erasing: null };
+        case CanvasMode.Lasso:
+          return { mode: CanvasMode.Lasso, points: null };
         case CanvasMode.Panning:
           return stateBeforePan.current;
         case CanvasMode.Pencil:
+        case CanvasMode.Bucket:
         case CanvasMode.Hand:
         case CanvasMode.Laser:
         case CanvasMode.Inserting:
@@ -1416,11 +1513,14 @@ export const Canvas = ({
         setCanvasState((state) =>
           state.mode === CanvasMode.Creating
             ? { mode: CanvasMode.Inserting, layerType: state.layerType }
-            : state.mode === CanvasMode.Pencil ||
-                state.mode === CanvasMode.Inserting ||
-                state.mode === CanvasMode.Comment
-              ? state
-              : { mode: CanvasMode.None }
+            : state.mode === CanvasMode.Lasso
+              ? { mode: CanvasMode.Lasso, points: null }
+              : state.mode === CanvasMode.Pencil ||
+                  state.mode === CanvasMode.Inserting ||
+                  state.mode === CanvasMode.Bucket ||
+                  state.mode === CanvasMode.Comment
+                ? state
+                : { mode: CanvasMode.None }
         );
       }
 
@@ -1496,9 +1596,36 @@ export const Canvas = ({
           mode: CanvasMode.Inserting,
           layerType: LayerType.Ellipse,
         }),
+        tool("diamond", "Diamond", Diamond, "D", {
+          mode: CanvasMode.Inserting,
+          layerType: LayerType.Diamond,
+        }),
         tool("arrow", "Arrow", MoveUpRight, "A", {
           mode: CanvasMode.Inserting,
           layerType: LayerType.Arrow,
+        }),
+        tool("line", "Line", Minus, "L", {
+          mode: CanvasMode.Inserting,
+          layerType: LayerType.Line,
+        }),
+        tool("table", "Table (spreadsheet)", TableIcon, "G", {
+          mode: CanvasMode.Inserting,
+          layerType: LayerType.Table,
+        }),
+        tool("frame", "Frame", FrameIcon, "F", {
+          mode: CanvasMode.Inserting,
+          layerType: LayerType.Frame,
+        }),
+        tool("embed", "Web embed", Globe, "", {
+          mode: CanvasMode.Inserting,
+          layerType: LayerType.Embed,
+        }),
+        tool("bucket", "Bucket fill", PaintBucket, "B", {
+          mode: CanvasMode.Bucket,
+        }),
+        tool("lasso", "Lasso selection", Lasso, "", {
+          mode: CanvasMode.Lasso,
+          points: null,
         }),
         tool("pen", "Pen", Pencil, "P", { mode: CanvasMode.Pencil }),
         tool("text", "Text", Type, "T", {
@@ -1857,6 +1984,13 @@ export const Canvas = ({
             )}
           </div>
         </div>
+        {!readOnly && canvasState.mode === CanvasMode.Bucket && (
+          <BucketPalette
+            color={bucketColor}
+            onPick={setBucketColor}
+            sheet={isPhone}
+          />
+        )}
         {!readOnly && (
           <PropertiesPanel
             isHidden={isBusy(canvasState.mode) || (isPhone && !stylesOpen)}
@@ -2003,6 +2137,9 @@ export const Canvas = ({
           onPointerCancelCapture={onTouchEnd}
         >
           <CameraScaleContext.Provider value={camera.scale}>
+            <TableInteractionContext.Provider
+              value={canvasState.mode === CanvasMode.None}
+            >
             <g
               transform={`translate(${camera.x} ${camera.y}) scale(${camera.scale})`}
             >
@@ -2031,6 +2168,17 @@ export const Canvas = ({
                   </g>
                 </CanvasReadOnlyContext.Provider>
               )}
+              {canvasState.mode === CanvasMode.Lasso && canvasState.points && (
+                <path
+                  d={`M ${canvasState.points.map((p) => `${p.x} ${p.y}`).join(" L ")} Z`}
+                  fill="rgb(59 130 246 / 0.06)"
+                  stroke="rgb(59 130 246)"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+              )}
               {canvasState.mode === CanvasMode.SelectionNet &&
                 canvasState.current != null && (
                   <rect
@@ -2058,6 +2206,7 @@ export const Canvas = ({
                 />
               )}
             </g>
+            </TableInteractionContext.Provider>
           </CameraScaleContext.Provider>
         </svg>
         {comments?.({

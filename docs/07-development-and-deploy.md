@@ -96,7 +96,7 @@ On every push and pull request, with pnpm 12 and Node 24:
 
 ## Testing approach
 
-- No automated test suite yet (Playwright with `@clerk/testing` is planned for Phase 7).
+- No automated test suite yet (Playwright with `@clerk/testing` is planned for Phase 7, see [08-phase-7-production-plan.md](08-phase-7-production-plan.md)).
 - Changes are tested by hand in the Claude desktop built-in browser against `pnpm dev` (the user is signed in there; never sign them out). Touch is tested with simulated pointer events and phone-size viewports; real iPhone behavior has to be checked by the user on a device.
 - Server rules can be tested with `npx convex run --identity '<json>' <function> '<args>'` against the dev deployment.
 - Create throwaway test boards for testing and delete them afterwards. Don't touch the user's own "testing" / "Untitled" boards.

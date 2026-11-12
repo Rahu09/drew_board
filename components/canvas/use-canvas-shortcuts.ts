@@ -31,6 +31,11 @@ const TOOLS: Record<string, CanvasState> = {
   r: { mode: CanvasMode.Inserting, layerType: LayerType.Rectangle },
   o: { mode: CanvasMode.Inserting, layerType: LayerType.Ellipse },
   a: { mode: CanvasMode.Inserting, layerType: LayerType.Arrow },
+  d: { mode: CanvasMode.Inserting, layerType: LayerType.Diamond },
+  l: { mode: CanvasMode.Inserting, layerType: LayerType.Line },
+  f: { mode: CanvasMode.Inserting, layerType: LayerType.Frame },
+  g: { mode: CanvasMode.Inserting, layerType: LayerType.Table },
+  b: { mode: CanvasMode.Bucket },
   p: { mode: CanvasMode.Pencil },
   h: { mode: CanvasMode.Hand },
   e: { mode: CanvasMode.Eraser, erasing: null },
@@ -137,7 +142,9 @@ interface CanvasShortcutsOptions {
 /**
  * Board keyboard shortcuts. "Mod" is Ctrl, or ⌘ on a Mac.
  *
- * - V, T, N, R, O, A, P: select, text, note, rectangle, ellipse, arrow, pen
+ * - V, T, N, R, D, O, A, L, P: select, text, note, rectangle, diamond,
+ *   ellipse, arrow, line, pen
+ * - G: table, F: frame, B: bucket fill
  * - I: add an image; C: comment (boards with comments)
  * - Delete / Backspace: delete the selection
  * - Mod+A select all, Mod+D duplicate, Mod+C / Mod+X copy, cut (paste is

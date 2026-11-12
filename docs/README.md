@@ -13,6 +13,7 @@ Start with the overview. If you are picking up work (human or AI), also read [PR
 | [05-canvas.md](05-canvas.md) | The canvas: store layer, modes, tools, rendering, styles, text, touch and phone layout, export, shortcuts |
 | [06-dashboard.md](06-dashboard.md) | Dashboard: board list, thumbnails, optimistic updates, rename, sorting, theme, landing page |
 | [07-development-and-deploy.md](07-development-and-deploy.md) | Local setup, env vars, scripts, checks, CI, deployment, troubleshooting |
+| [08-phase-7-production-plan.md](08-phase-7-production-plan.md) | Phase 7 (production Clerk, Sentry, Vercel Analytics, Playwright e2e): planned, **not implemented**; what each would do, benefits, risks, cost, interview answers |
 | [PROJECT_HISTORY.md](PROJECT_HISTORY.md) | Roadmap and status, decisions, change log, problems and fixes, working rules, open items |
 
 The root [README.md](../README.md) is the short user-facing summary (setup, routes, controls, shortcuts table).

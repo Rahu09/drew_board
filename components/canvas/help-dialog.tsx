@@ -16,8 +16,13 @@ const GROUPS: { title: string; items: [label: string, ...keys: string[]][] }[] =
       items: [
         ["Select", "V"],
         ["Rectangle", "R"],
+        ["Diamond", "D"],
         ["Ellipse", "O"],
         ["Arrow", "A"],
+        ["Line", "L"],
+        ["Table (spreadsheet)", "G"],
+        ["Frame", "F"],
+        ["Bucket fill", "B"],
         ["Pen", "P"],
         ["Text", "T"],
         ["Sticky note", "N"],

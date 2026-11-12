@@ -184,6 +184,7 @@ html.board-dark {
 
 html.board-dark img,
 html.board-dark image,
+html.board-dark iframe,
 html.board-dark video {
   filter: invert(100%) hue-rotate(180deg);
 }

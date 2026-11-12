@@ -1,5 +1,10 @@
 import { colorToCss } from "@/lib/utils";
-import { LayerType, type EllipseLayer, type RectangleLayer } from "@/types/canvas";
+import {
+  LayerType,
+  type DiamondLayer,
+  type EllipseLayer,
+  type RectangleLayer,
+} from "@/types/canvas";
 
 import type { ShapeSpec } from "./rough-shape";
 import { seedFromId } from "./rough-shape";
@@ -18,19 +23,27 @@ export const OUTLINE_WIDTH = 2;
  */
 export const shapeSpec = (
   id: string,
-  layer: RectangleLayer | EllipseLayer
+  layer: RectangleLayer | EllipseLayer | DiamondLayer
 ): ShapeSpec => {
   const color = layer.fill ? colorToCss(layer.fill) : "#000";
   const isOutline = layer.fillStyle === "none";
 
   return {
-    kind: layer.type === LayerType.Rectangle ? "rectangle" : "ellipse",
+    kind:
+      layer.type === LayerType.Rectangle
+        ? "rectangle"
+        : layer.type === LayerType.Diamond
+          ? "diamond"
+          : "ellipse",
     x: layer.x,
     y: layer.y,
     width: layer.width,
     height: layer.height,
     roughness: layer.roughness ?? 0,
-    edges: layer.type === LayerType.Rectangle ? layer.edges : undefined,
+    edges:
+      layer.type === LayerType.Rectangle || layer.type === LayerType.Diamond
+        ? layer.edges
+        : undefined,
     stroke: isOutline ? color : null,
     strokeWidth: OUTLINE_WIDTH,
     background: isOutline

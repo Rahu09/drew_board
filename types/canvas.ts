@@ -30,6 +30,11 @@ export enum LayerType {
   Note,
   Arrow,
   Image,
+  Diamond,
+  Line,
+  Frame,
+  Embed,
+  Table,
 }
 
 /**
@@ -68,7 +73,12 @@ export type InsertableLayerType =
   | LayerType.Ellipse
   | LayerType.Text
   | LayerType.Note
-  | LayerType.Arrow;
+  | LayerType.Arrow
+  | LayerType.Diamond
+  | LayerType.Line
+  | LayerType.Frame
+  | LayerType.Embed
+  | LayerType.Table;
 
 /**
  * Rectangles and ellipses: with fillStyle "none", `fill` is the stroke and
@@ -77,6 +87,21 @@ export type InsertableLayerType =
  */
 export type RectangleLayer = Common & {
   type: LayerType.Rectangle;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  fill: Color;
+  fillStyle?: FillStyle;
+  backgroundColor?: Color | null;
+  roughness?: Roughness;
+  edges?: Edges;
+  value?: string;
+};
+
+/** Like a rectangle, turned 45°: its corners are the middles of the sides. */
+export type DiamondLayer = Common & {
+  type: LayerType.Diamond;
   x: number;
   y: number;
   height: number;
@@ -165,6 +190,98 @@ export type ArrowLayer = Common & {
   width: number;
   fill: Color;
   points: number[][];
+  roughness?: Roughness;
+  value?: string;
+};
+
+/** A straight line: an arrow without the head. */
+export type LineLayer = Common & {
+  type: LayerType.Line;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  fill: Color;
+  points: number[][];
+  roughness?: Roughness;
+  value?: string;
+};
+
+/** Arrows and lines share their geometry. */
+export type LinearLayer = ArrowLayer | LineLayer;
+
+/**
+ * A named area to group things in. Drawn as an outline with its name above;
+ * `fill` is the outline color and `value` the name. Moving a frame moves
+ * the layers inside it.
+ */
+export type FrameLayer = Common & {
+  type: LayerType.Frame;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  fill: Color;
+  value?: string;
+};
+
+/**
+ * A web page shown inside the board (YouTube, Vimeo, Figma, any page that
+ * allows being embedded). `src` is the https URL of the embed; empty until
+ * a link is pasted.
+ */
+export type EmbedLayer = Common & {
+  type: LayerType.Embed;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  fill: Color;
+  src?: string;
+  value?: string;
+};
+
+export type NumberFormat = "num" | "int" | "cur" | "pct";
+
+/**
+ * One cell of a table. Every field is optional and left out when unset
+ * (Liveblocks storage takes no undefined values).
+ */
+export type TableCell = {
+  /** The text, or a formula when it starts with "=". */
+  v?: string;
+  b?: 1;
+  i?: 1;
+  /** Horizontal alignment; default: numbers right, text left. */
+  a?: TextAlign;
+  /** Text color, "#rrggbb". */
+  c?: string;
+  /** Cell background, "#rrggbb". */
+  g?: string;
+  /** How a number is shown. */
+  n?: NumberFormat;
+};
+
+/**
+ * A spreadsheet-like grid. `cols` and `rows` are the column widths and row
+ * heights, so width and height always equal their sums. `cells` is keyed
+ * "row,col" (zero based) and holds only the cells that have content or
+ * style. `fill` is the grid and default text color.
+ */
+export type TableLayer = Common & {
+  type: LayerType.Table;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  fill: Color;
+  cols: number[];
+  rows: number[];
+  cells: Record<string, TableCell>;
+  /** First row is a header (bold, shaded). */
+  header?: boolean;
+  fontFamily?: FontFamily;
+  fontSize?: number;
   value?: string;
 };
 
@@ -184,6 +301,9 @@ export type Point = {
   x: number;
   y: number;
 };
+
+export const isLinearLayer = (layer: { type: LayerType }): layer is LinearLayer =>
+  layer.type === LayerType.Arrow || layer.type === LayerType.Line;
 
 export type XYWH = {
   x: number;
@@ -267,6 +387,16 @@ export type CanvasState =
   | {
       // Laser pointer: a fading trail to point at things.
       mode: CanvasMode.Laser;
+    }
+  | {
+      // Bucket: click a shape to fill it with the chosen color.
+      mode: CanvasMode.Bucket;
+    }
+  | {
+      // Lasso: draw a loop around layers to select them. `points` is the
+      // loop while the pointer is down (null when it is up).
+      mode: CanvasMode.Lasso;
+      points: Point[] | null;
     };
 
 export enum CanvasMode {
@@ -284,10 +414,17 @@ export enum CanvasMode {
   Hand,
   Eraser,
   Laser,
+  Bucket,
+  Lasso,
 }
 
 export type Layer =
   | RectangleLayer
+  | DiamondLayer
+  | LineLayer
+  | FrameLayer
+  | EmbedLayer
+  | TableLayer
   | EllipseLayer
   | PathLayer
   | TextLayer

@@ -1,19 +1,19 @@
 import { useMemo } from "react";
 
-import type { EllipseLayer, RectangleLayer } from "@/types/canvas";
+import type { DiamondLayer, EllipseLayer, RectangleLayer } from "@/types/canvas";
 
 import { cleanShapePath, shapePaths } from "./rough-shape";
 import { HIT_STROKE_WIDTH, shapeSpec } from "./shape-style";
 
 interface ShapeProps {
   id: string;
-  layer: RectangleLayer | EllipseLayer;
+  layer: RectangleLayer | EllipseLayer | DiamondLayer;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   selectionColor?: string;
 }
 
 /**
- * A rectangle or ellipse. One with a see-through inside is picked up by
+ * A rectangle, ellipse or diamond. One with a see-through inside is picked up by
  * its edge only, so what is under it stays clickable.
  */
 export const Shape = ({
@@ -58,6 +58,16 @@ export const Shape = ({
             fill="none"
             stroke={selectionColor}
             strokeWidth={1}
+            pointerEvents="none"
+          />
+        ) : kind === "diamond" ? (
+          <path
+            d={outline}
+            fill="none"
+            stroke={selectionColor}
+            strokeWidth={5}
+            strokeOpacity={0.35}
+            strokeLinejoin="round"
             pointerEvents="none"
           />
         ) : (

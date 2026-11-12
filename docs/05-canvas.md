@@ -38,6 +38,8 @@ Why: Phase 3 needed the same canvas for guests without Liveblocks (no monthly-ac
 | `Hand` | Hand tool (drag pans) |
 | `Eraser` | Drag over layers to delete them (one undo restores) |
 | `Laser` | Laser pointer trail, shared via presence |
+| `Bucket` | Click a shape, sticky note or table cell to fill it with the color chosen in the `BucketPalette` (`bucket.ts` finds the topmost fillable layer under the click with real geometry, so an empty rectangle can be filled by clicking inside it) |
+| `Lasso` | Draw a loop; on release every layer with a sample point (center, corners, edge middles) inside it is selected and the tool returns to Select (`hit-test.ts`) |
 
 After creating a shape the tool returns to Select. New layers go **on top**.
 
@@ -53,11 +55,35 @@ After creating a shape the tool returns to Select. New layers go **on top**.
 
 The canvas is one `<svg>`. `layer-preview.tsx` picks a component per layer type:
 
-- `rectangle.tsx`, `ellipse.tsx`: drawn with **rough.js** (`rough-shape.ts`, `shape.tsx`, `shape-style.ts`). Sloppiness 0 architect / 1 artist / 2 cartoonist; the rough seed is derived from the layer id so the wobble is identical on every redraw and for every viewer. Outline shapes (`fillStyle: "none"`) are only clickable on the outline, so you can click through to what's underneath.
+- `rectangle.tsx`, `ellipse.tsx`, `diamond.tsx`: drawn with **rough.js** (`rough-shape.ts`, `shape.tsx`, `shape-style.ts`). Sloppiness 0 architect / 1 artist / 2 cartoonist; the rough seed is derived from the layer id so the wobble is identical on every redraw and for every viewer. Outline shapes (`fillStyle: "none"`) are only clickable on the outline, so you can click through to what's underneath.
 - `path.tsx`: pen strokes with perfect-freehand.
-- `arrow.tsx`: straight arrows with draggable end handles; Shift snaps to 45°.
+- `arrow.tsx`: straight arrows **and lines** (`LayerType.Line`, an arrow without the head) with draggable end handles; Shift snaps to 45°. Hand-drawn like the shapes (`linearPaths` in `rough-shape.ts`, optional `roughness`).
+- `frame.tsx`: a named area (round outline, name above, double-click the name to rename). The inside lets clicks through; moving a frame moves every layer fully inside it (`withFrameContents` in `hit-test.ts`, worked out once per drag into `translateIds`).
+- `embed.tsx` + `embed-url.ts`: a web page in an `<iframe>` inside a `<foreignObject>`. Only https; YouTube, Vimeo, Spotify, Loom and Figma links are turned into their embed address, anything else is used as is. `sandbox` limits the page, `referrerPolicy="strict-origin-when-cross-origin"` (YouTube refuses a frame with no referrer: Error 153). While merely selected, a transparent rectangle keeps it movable; double-click or "Interact" hands the mouse to the page. **Safari and every iPhone browser** (`isWebKit()`) get a link card instead of the iframe, because WebKit draws frames inside the transformed SVG wrongly. Dark theme turns iframes back like images. Export draws a placeholder with the host name.
+- `table/`: the spreadsheet (see "Tables" below).
 - `image-layer.tsx`: SVG `<image>`.
 - `text.tsx`, `note.tsx`: HTML in a `<foreignObject>` with an editable `plain-text-editable.tsx`.
+
+### Defaults of new layers
+
+Everything drawn is hand-drawn (**sloppiness 1, "artist"**) with **round corners** where corners exist: rectangle, diamond, note, arrow, line (`createShapeLayer` in `lib/canvas-geometry.ts`). Ellipses are round anyway. Tables and frames stay clean on purpose (a wobbly grid is unreadable; frames are structure). Layers saved earlier keep their old look because the fields are optional.
+
+### Tables
+
+A `LayerType.Table` layer (`types/canvas.ts`, code in `components/canvas/table/`) is a grid with Excel-like features:
+
+| Feature | Where |
+| --- | --- |
+| Cells with text or **formulas** (`=SUM(A1:B3)`, `=IF(B2>5,"big","small")`): A1 references and ranges, `+ - * / ^ & %`, comparisons, about 30 functions (SUM AVERAGE MIN MAX COUNT COUNTA COUNTBLANK PRODUCT MEDIAN ABS SQRT INT ROUND ROUNDUP ROUNDDOWN POWER MOD PI IF IFERROR AND OR NOT CONCAT LEN UPPER LOWER TRIM LEFT RIGHT SUMIF COUNTIF), errors `#DIV/0! #REF! #NAME? #VALUE! #CIRC! #ERROR!`. A small parser, never `eval` | `formula.ts` |
+| Number formats (auto, 1.00, 1,000, $, %), bold, italic, alignment, text color, cell fill, header row | `format.ts`, `table-panel.tsx` |
+| Select cells (click, drag, Shift+click, column or row header, Ctrl+A); arrows, Tab, Enter, F2, typing, Delete, Escape; Ctrl+B / I / Z | `table-layer.tsx` |
+| Copy, cut, paste as tab-separated text (works with Excel and Google Sheets; a pasted grid grows the table; one value pasted into a block fills the block) | `table-layer.tsx`, `model.ts` |
+| Insert and delete rows and columns (formula references move with them), drag column and row borders to resize, sort by a column, fill down and right, clear, download CSV | `model.ts`, `table-panel.tsx` |
+| Up to 52 columns, 200 rows, 5,000 filled cells | `model.ts`, `lib/board-store/validate.ts` |
+
+How it works: the grid is drawn as SVG (so export is easy and nothing hits the WebKit foreignObject bug); one invisible `<textarea>` over the selected cell takes the keyboard. While not editing it holds the tab-separated text of the selection, selected, so the browser's own copy and cut work. Text that arrives without a key press (phone keyboards, input methods) starts an edit too. Clicking a table first selects it (move, delete, duplicate as any layer); once it is the only selected layer clicks select cells, and the corner square above the row numbers moves it. The pointer release after a cell click is swallowed (`trackPointer`), or the canvas would read it as a click on empty space and deselect the table. Cell selection lives in `selection.ts` (zustand) so the style panel can work on it.
+
+Data: `cols` and `rows` are the column widths and row heights (`width` and `height` are their sums), `cells` is `{ "row,col": { v, b, i, a, c, g, n } }` with only filled cells. Saved whole in the layer, so **two people editing different cells of one table at the same moment can overwrite each other** (last write wins for the whole table). Sorting does not rewrite formulas that point at other rows. No merged cells, charts, freeze panes or wrapped text yet.
 
 ### Text and sticky notes
 
@@ -95,7 +121,8 @@ The canvas is one `<svg>`. `layer-preview.tsx` picks a component per layer type:
 
 | Keys | Action |
 | --- | --- |
-| V, T, N, R, O, A, P | Select, text, note, rectangle, ellipse, arrow, pen |
+| V, T, N, R, D, O, A, L, P | Select, text, note, rectangle, diamond, ellipse, arrow, line, pen |
+| G, F, B | Table, frame, bucket fill (web embed and lasso are in the "More tools" menu, no key) |
 | H, E, K | Hand, eraser, laser |
 | I / C | Image / comment (saved boards) |
 | Delete / Backspace | Delete selection |

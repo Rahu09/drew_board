@@ -3,7 +3,15 @@ import {
   type Color,
   type FillStyle,
   type Layer,
+  type NumberFormat,
+  type TableCell,
 } from "@/types/canvas";
+import {
+  MAX_CELL_LENGTH,
+  MAX_COLS,
+  MAX_ROWS,
+  sizeOf,
+} from "@/components/canvas/table/model";
 
 import { MAX_LAYERS, type BoardSnapshot } from "./types";
 
@@ -108,6 +116,56 @@ const parseImageSrc = (value: unknown): string | null => {
   }
 };
 
+const NUMBER_FORMATS = ["num", "int", "cur", "pct"] as const satisfies readonly NumberFormat[];
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+/** Most cells with content a table may have. */
+const MAX_TABLE_CELLS = 5_000;
+
+const parseSizes = (value: unknown, max: number, min: number, limit: number) => {
+  if (!Array.isArray(value) || value.length < 1 || value.length > max) return null;
+
+  return value.every((n) => isFiniteNumber(n) && n >= min && n <= limit)
+    ? (value as number[])
+    : null;
+};
+
+const parseTableCell = (value: unknown): TableCell | null => {
+  if (!isRecord(value)) return null;
+
+  const cell: TableCell = {};
+
+  if (typeof value.v === "string" && value.v) cell.v = value.v.slice(0, MAX_CELL_LENGTH);
+  if (value.b === 1) cell.b = 1;
+  if (value.i === 1) cell.i = 1;
+  if (TEXT_ALIGNS.includes(value.a as never)) cell.a = value.a as TableCell["a"];
+  if (typeof value.c === "string" && HEX_COLOR.test(value.c)) cell.c = value.c.toLowerCase();
+  if (typeof value.g === "string" && HEX_COLOR.test(value.g)) cell.g = value.g.toLowerCase();
+  if (NUMBER_FORMATS.includes(value.n as never)) cell.n = value.n as NumberFormat;
+
+  return Object.keys(cell).length ? cell : null;
+};
+
+/** The cells of a table; those outside its rows and columns are dropped. */
+const parseTableCells = (value: unknown, rows: number, cols: number) => {
+  const cells: Record<string, TableCell> = {};
+  if (!isRecord(value)) return cells;
+
+  let count = 0;
+
+  for (const [key, raw] of Object.entries(value)) {
+    const match = /^(\d{1,3}),(\d{1,3})$/.exec(key);
+    if (!match || Number(match[1]) >= rows || Number(match[2]) >= cols) continue;
+
+    const cell = parseTableCell(raw);
+    if (!cell) continue;
+
+    cells[key] = cell;
+    if (++count >= MAX_TABLE_CELLS) break;
+  }
+
+  return cells;
+};
+
 export const parseLayer = (value: unknown): Layer | null => {
   if (!isRecord(value)) return null;
 
@@ -155,6 +213,16 @@ export const parseLayer = (value: unknown): Layer | null => {
         ...oneOf("edges", value.edges, EDGES),
         ...text,
       };
+    case LayerType.Diamond:
+      return {
+        type,
+        ...base,
+        ...parseFillStyle(value.fillStyle),
+        ...parseBackground(value.backgroundColor),
+        ...oneOf("roughness", value.roughness, ROUGHNESS),
+        ...oneOf("edges", value.edges, EDGES),
+        ...text,
+      };
     case LayerType.Ellipse:
       return {
         type,
@@ -193,9 +261,37 @@ export const parseLayer = (value: unknown): Layer | null => {
       const points = parsePoints(value.points);
       return points ? { type, ...base, points } : null;
     }
-    case LayerType.Arrow: {
+    case LayerType.Arrow:
+    case LayerType.Line: {
       const points = parsePoints(value.points);
-      return points?.length === 2 ? { type, ...base, points } : null;
+      return points?.length === 2
+        ? { type, ...base, points, ...oneOf("roughness", value.roughness, ROUGHNESS) }
+        : null;
+    }
+    case LayerType.Frame:
+      return { type, ...base, ...text };
+    case LayerType.Embed: {
+      // Empty until a link is pasted; only https is ever kept.
+      const src = parseImageSrc(value.src);
+      return { type, ...base, ...(src ? { src } : {}) };
+    }
+    case LayerType.Table: {
+      const cols = parseSizes(value.cols, MAX_COLS, 12, 2000);
+      const rows = parseSizes(value.rows, MAX_ROWS, 12, 1000);
+      if (!cols || !rows) return null;
+
+      return {
+        type,
+        ...base,
+        // The box is always what the columns and rows add up to.
+        ...sizeOf(cols, rows),
+        cols,
+        rows,
+        cells: parseTableCells(value.cells, rows.length, cols.length),
+        ...(value.header === true ? { header: true } : {}),
+        ...oneOf("fontFamily", value.fontFamily, FONT_FAMILIES),
+        ...fontSize,
+      };
     }
     case LayerType.Image: {
       const src = parseImageSrc(value.src);

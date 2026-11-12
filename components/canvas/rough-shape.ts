@@ -16,13 +16,13 @@ export type ShapePath = {
 };
 
 export type ShapeSpec = {
-  kind: "rectangle" | "ellipse";
+  kind: "rectangle" | "ellipse" | "diamond";
   x: number;
   y: number;
   width: number;
   height: number;
   roughness: Roughness;
-  /** Rectangles only. */
+  /** Rectangles and diamonds. */
   edges?: Edges;
   /** CSS color, or null for no outline. */
   stroke: string | null;
@@ -67,9 +67,53 @@ const roundRectPath = (
   );
 };
 
+/** The corners of a diamond: the middles of the sides of its box. */
+const diamondPoints = (x: number, y: number, width: number, height: number) => [
+  { x: x + width / 2, y },
+  { x: x + width, y: y + height / 2 },
+  { x: x + width / 2, y: y + height },
+  { x, y: y + height / 2 },
+];
+
+/** Corner radius of a round diamond: a fraction of its shorter diagonal. */
+export const diamondRadius = (width: number, height: number) =>
+  Math.min(36, Math.min(Math.abs(width), Math.abs(height)) * 0.18);
+
+/**
+ * A polygon with rounded corners: each corner is cut back by `radius`
+ * along both sides and joined with a curve through the corner.
+ */
+const roundedPolygonPath = (points: { x: number; y: number }[], radius: number) => {
+  const n = points.length;
+  let d = "";
+
+  points.forEach((corner, i) => {
+    const before = points[(i + n - 1) % n];
+    const after = points[(i + 1) % n];
+    const cut = (to: { x: number; y: number }) => {
+      const length = Math.hypot(to.x - corner.x, to.y - corner.y) || 1;
+      const t = Math.min(radius, length / 2) / length;
+      return { x: corner.x + (to.x - corner.x) * t, y: corner.y + (to.y - corner.y) * t };
+    };
+    const start = cut(before);
+    const end = cut(after);
+
+    d += `${i === 0 ? "M" : "L"} ${start.x} ${start.y} Q ${corner.x} ${corner.y} ${end.x} ${end.y} `;
+  });
+
+  return `${d}Z`;
+};
+
 /** The outline of the shape as clean SVG path data (no wobble). */
 export const cleanShapePath = (spec: ShapeSpec) => {
   const { x, y, width, height } = spec;
+
+  if (spec.kind === "diamond") {
+    const corners = diamondPoints(x, y, width, height);
+    return spec.edges === "round"
+      ? roundedPolygonPath(corners, diamondRadius(width, height))
+      : `M ${corners.map((p) => `${p.x} ${p.y}`).join(" L ")} Z`;
+  }
 
   if (spec.kind === "ellipse") {
     const rx = width / 2;
@@ -122,7 +166,9 @@ export const shapePaths = (spec: ShapeSpec): ShapePath[] => {
 
   const { x, y } = spec;
   const drawable =
-    spec.kind === "ellipse"
+    spec.kind === "diamond"
+      ? generator.path(cleanShapePath({ ...spec, width, height }), options)
+      : spec.kind === "ellipse"
       ? generator.ellipse(x + width / 2, y + height / 2, width, height, {
           ...options,
           curveFitting: 1,
@@ -139,5 +185,37 @@ export const shapePaths = (spec: ShapeSpec): ShapePath[] => {
     stroke: path.stroke,
     strokeWidth: path.strokeWidth,
     fill: path.fill ?? "none",
+  }));
+};
+
+/**
+ * The SVG paths of an arrow or line: the clean path with sloppiness 0, a
+ * hand-drawn one from rough.js with 1 or 2. Not filled.
+ */
+export const linearPaths = (
+  d: string,
+  roughness: Roughness,
+  stroke: string,
+  strokeWidth: number,
+  seed: number
+): ShapePath[] => {
+  if (roughness === 0) {
+    return [{ d, stroke, strokeWidth, fill: "none" }];
+  }
+
+  const drawable = generator.path(d, {
+    seed,
+    roughness: roughness === 1 ? 1 : 2.4,
+    bowing: roughness === 1 ? 1 : 2,
+    stroke,
+    strokeWidth,
+    preserveVertices: true,
+  });
+
+  return generator.toPaths(drawable).map((path) => ({
+    d: path.d,
+    stroke: path.stroke,
+    strokeWidth: path.strokeWidth,
+    fill: "none",
   }));
 };
